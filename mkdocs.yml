@@ -1,0 +1,9 @@
+site_name: MyBookTools
+repo_url: https://github.com/AJ1126/MyBookTools
+theme:
+  name: material
+nav:
+  - Home: index.md
+  - Installation: install.md
+  - Commands: commands.md
+  - Examples: examples.md
