@@ -383,6 +383,8 @@ $timer.Add_Tick({
     $s = Get-MyBookStatus
     if ($s.Operation) {
         Set-Status "$($s.Operation) — $($s.Details)" '#F9E2AF'
+    } else {
+        Set-Status "Idle" '#A6E3A1'
     }
 })
 $timer.Start()

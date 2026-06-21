@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     MyBookTools v2 — Complete drive auditing, categorization, refinement, and maintenance toolkit.
 
@@ -105,6 +105,12 @@ function Set-MyBookStatus {
     $Script:MyBook_Status.Operation  = $Operation
     $Script:MyBook_Status.Details    = $Details
     $Script:MyBook_Status.LastUpdate = Get-Date
+
+    # Dump status to a JSON file for cross-process communication
+    try {
+        $statusFile = Join-Path $Script:MyBook_DefaultLogRoot 'MyBook_Status.json'
+        $Script:MyBook_Status | ConvertTo-Json | Set-Content -Path $statusFile -Encoding UTF8
+    } catch {}
 }
 
 function Clear-MyBookStatus {
@@ -116,6 +122,14 @@ function Clear-MyBookStatus {
     $Script:MyBook_Status.Details    = $null
     $Script:MyBook_Status.StartedAt  = $null
     $Script:MyBook_Status.LastUpdate = $null
+
+    # Clear status in the JSON file
+    try {
+        $statusFile = Join-Path $Script:MyBook_DefaultLogRoot 'MyBook_Status.json'
+        if (Test-Path $statusFile) {
+            Remove-Item -Path $statusFile -Force -ErrorAction SilentlyContinue
+        }
+    } catch {}
 }
 
 function Get-MyBookStatus {
@@ -126,6 +140,20 @@ function Get-MyBookStatus {
 .EXAMPLE
     Get-MyBookStatus
 #>
+    $statusFile = Join-Path $Script:MyBook_DefaultLogRoot 'MyBook_Status.json'
+    if (Test-Path $statusFile) {
+        try {
+            $json = Get-Content -Path $statusFile -Raw | ConvertFrom-Json
+            if ($json -and $json.Operation) {
+                return [PSCustomObject]@{
+                    Operation  = $json.Operation
+                    StartedAt  = $json.StartedAt
+                    LastUpdate = $json.LastUpdate
+                    Details    = $json.Details
+                }
+            }
+        } catch {}
+    }
     $Script:MyBook_Status
 }
 
@@ -206,7 +234,12 @@ function Update-MyBookHashCache {
 
     $cache = @{}
     if (Test-Path $CachePath) {
-        $cache = Get-Content -Path $CachePath -Raw | ConvertFrom-Json
+        $jsonObj = Get-Content -Path $CachePath -Raw | ConvertFrom-Json
+        if ($jsonObj) {
+            foreach ($prop in $jsonObj.psobject.properties) {
+                $cache[$prop.Name] = $prop.Value
+            }
+        }
     }
 
     $result = @{}
@@ -216,16 +249,16 @@ function Update-MyBookHashCache {
             $key = $_.FullName
             $meta = @{
                 Length        = $_.Length
-                LastWriteTime = $_.LastWriteTime
+                LastWriteTime = $_.LastWriteTime.ToString('o')
             }
 
-            if ($cache.ContainsKey($key) -and
+            if ($null -ne $cache[$key] -and
                 $cache[$key].Length -eq $meta.Length -and
                 $cache[$key].LastWriteTime -eq $meta.LastWriteTime) {
 
                 $hash = $cache[$key].Hash
             } else {
-                try { $hash = (Get-FileHash -Path $_.FullName).Hash } catch { $hash = $null }
+                try { $hash = (Get-FileHash -LiteralPath $_.FullName).Hash } catch { $hash = $null }
             }
 
             $result[$key] = @{
@@ -272,7 +305,7 @@ function Invoke-MyBookAuditFast {
         ForEach-Object {
             $hash = $null
             if ($IncludeHashes) {
-                try { $hash = (Get-FileHash -Path $_.FullName).Hash } catch {}
+                try { $hash = (Get-FileHash -LiteralPath $_.FullName).Hash } catch {}
             }
 
             $stream.Add([PSCustomObject]@{
@@ -349,6 +382,16 @@ function Invoke-MyBookCategorize {
     $files = Get-ChildItem -Path $RootPath -Recurse -File -ErrorAction SilentlyContinue
 
     foreach ($file in $files) {
+        # Skip if file is already inside one of the target category destination folders
+        $alreadyCategorized = $false
+        foreach ($dest in $destinations.Values) {
+            if ($file.FullName.StartsWith($dest, [System.StringComparison]::InvariantCultureIgnoreCase)) {
+                $alreadyCategorized = $true
+                break
+            }
+        }
+        if ($alreadyCategorized) { continue }
+
         $targetCategory = $null
 
         foreach ($cat in $CategoryMap.Keys) {
@@ -419,19 +462,21 @@ function Resolve-MyBookDuplicates {
     $hashGroups = $files | Get-FileHash | Group-Object Hash | Where-Object Count -gt 1
 
     foreach ($group in $hashGroups) {
-        $sorted = $group.Group | Sort-Object LastWriteTime -Descending
+        # Map back to FileInfo objects to retrieve LastWriteTime
+        $duplicateFiles = $group.Group | ForEach-Object { Get-Item -LiteralPath $_.Path }
+        $sorted = $duplicateFiles | Sort-Object LastWriteTime -Descending
         $keep   = $sorted[0]
         $remove = $sorted[1..($sorted.Count - 1)]
 
-        Write-MyBookLog -Message "Keeping newest duplicate: $($keep.Path)"
+        Write-MyBookLog -Message "Keeping newest duplicate: $($keep.FullName)"
 
         foreach ($f in $remove) {
             if ($DryRun) {
-                Write-MyBookLog -Message "[DryRun] Would delete: $($f.Path)"
+                Write-MyBookLog -Message "[DryRun] Would delete: $($f.FullName)"
             } else {
-                if ($PSCmdlet.ShouldProcess($f.Path, "Delete duplicate")) {
-                    Remove-Item -Path $f.Path -Force
-                    Write-MyBookLog -Message "Deleted duplicate: $($f.Path)"
+                if ($PSCmdlet.ShouldProcess($f.FullName, "Delete duplicate")) {
+                    Remove-Item -LiteralPath $f.FullName -Force
+                    Write-MyBookLog -Message "Deleted duplicate: $($f.FullName)"
                 }
             }
         }
@@ -497,7 +542,8 @@ function Invoke-MyBookCleanup {
     if ($CompressArchives) {
         $archiveRoot = Join-Path $RootPath 'Archives'
         if (Test-Path $archiveRoot) {
-            $zipPath = Join-Path $archiveRoot ("Archives_{0:yyyyMMdd_HHmmss}.zip" -f (Get-Date))
+            # Compress files inside Archives to a zip at RootPath, avoiding zipping the zip itself recursively
+            $zipPath = Join-Path $RootPath ("Archives_{0:yyyyMMdd_HHmmss}.zip" -f (Get-Date))
             Compress-Archive -Path (Join-Path $archiveRoot '*') -DestinationPath $zipPath -Force
             Write-MyBookLog -Message "Compressed archives → $zipPath"
         }
@@ -542,7 +588,7 @@ Invoke-MyBookAuditFast | Out-Null
 
     switch ($Schedule) {
         'Daily' {
-            $trigger = New-ScheduledTaskTrigger -Daily -At 3:00AM
+            $trigger = New-ScheduledTaskTrigger -Daily -At "3:00 AM"
         }
         'Hourly' {
             $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(5)
@@ -550,7 +596,7 @@ Invoke-MyBookAuditFast | Out-Null
             $trigger.RepetitionDuration = 'P1D'
         }
         default {
-            $trigger = New-ScheduledTaskTrigger -Daily -At 3:00AM
+            $trigger = New-ScheduledTaskTrigger -Daily -At "3:00 AM"
         }
     }
 
