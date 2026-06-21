@@ -1,29 +1,31 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    MyBookTools WPF GUI — graphical launcher for all MyBookTools operations.
-
+    DriveTools WPF GUI — graphical launcher for all DriveTools operations.
 .DESCRIPTION
-    A self-contained WPF window. Paste this script into a .ps1 file and run it
-    from a PowerShell session that already has MyBookTools imported, or let the
-    script import the module automatically.
-
+    A self-contained WPF window. Run this script from a PowerShell session
+    that already has DriveTools imported, or let the script import it automatically.
 .NOTES
-    Requires Windows PowerShell 5.1 (Desktop edition) — WPF is not available in
-    PowerShell 7 on non-Windows platforms.
+    Requires Windows PowerShell 5.1 (Desktop edition).
 #>
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 
+# Copy PSScriptRoot to local variable to adhere to automatic variables constraint
+$ScriptDir = $PSScriptRoot
+
 # ── Import module if not already loaded ──────────────────────────────────────
-if (-not (Get-Module MyBookTools)) {
-    $modPath = "$env:USERPROFILE\Documents\WindowsPowerShell\Modules\MyBookTools\2.0\MyBookTools.psm1"
-    if (Test-Path $modPath) {
-        Import-Module $modPath
+if (-not (Get-Module DriveTools)) {
+    $localPath = Join-Path $ScriptDir "DriveTools.psm1"
+    $modPath = "$env:USERPROFILE\Documents\WindowsPowerShell\Modules\DriveTools\2.0\DriveTools.psm1"
+    if (Test-Path $localPath) {
+        Import-Module $localPath -Force
+    } elseif (Test-Path $modPath) {
+        Import-Module $modPath -Force
     } else {
         [System.Windows.MessageBox]::Show(
-            "MyBookTools module not found.`nExpected path:`n$modPath",
-            "MyBookTools GUI", "OK", "Error") | Out-Null
+            "DriveTools module not found.`nExpected local path:`n$localPath",
+            "DriveTools GUI", "OK", "Error") | Out-Null
         exit 1
     }
 }
@@ -33,7 +35,7 @@ if (-not (Get-Module MyBookTools)) {
 <Window
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="MyBookTools v2.0" Height="680" Width="780"
+    Title="DriveTools v2.0" Height="680" Width="780"
     ResizeMode="CanResize" WindowStartupLocation="CenterScreen"
     Background="#1E1E2E">
 
@@ -93,6 +95,14 @@ if (-not (Get-Module MyBookTools)) {
             <Setter Property="FontSize"    Value="12"/>
             <Setter Property="Padding"     Value="4,2"/>
         </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Background"  Value="#313244"/>
+            <Setter Property="Foreground"  Value="#313244"/>
+            <Setter Property="BorderBrush" Value="#45475A"/>
+            <Setter Property="FontFamily"  Value="Cascadia Code, Consolas, Monospace"/>
+            <Setter Property="FontSize"    Value="12"/>
+        </Style>
     </Window.Resources>
 
     <Grid Margin="12">
@@ -107,26 +117,28 @@ if (-not (Get-Module MyBookTools)) {
 
         <!-- Header -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
-            <TextBlock Text="📦 " FontSize="26"/>
-            <TextBlock Text="MyBookTools" FontSize="22" FontWeight="Bold"
-                       Foreground="#89B4FA"
-                       FontFamily="Cascadia Code, Consolas, Monospace"
-                       VerticalAlignment="Center"/>
+            <TextBlock Text="⚙️ " FontSize="26"/>
+            <TextBlock Text="DriveTools" FontSize="22" FontWeight="Bold"
+                        Foreground="#89B4FA"
+                        FontFamily="Cascadia Code, Consolas, Monospace"
+                        VerticalAlignment="Center"/>
             <TextBlock Text=" v2.0" FontSize="14" Foreground="#585B70"
-                       FontFamily="Cascadia Code, Consolas, Monospace"
-                       VerticalAlignment="Bottom" Margin="4,0,0,2"/>
+                        FontFamily="Cascadia Code, Consolas, Monospace"
+                        VerticalAlignment="Bottom" Margin="4,0,0,2"/>
         </StackPanel>
 
-        <!-- Root path -->
+        <!-- Root path & Drive dropdown -->
         <Grid Grid.Row="1" Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="80"/>
                 <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="180"/>
                 <ColumnDefinition Width="90"/>
             </Grid.ColumnDefinitions>
             <Label Grid.Column="0" Content="Root Path" VerticalAlignment="Center"/>
-            <TextBox Grid.Column="1" x:Name="TxtRoot" Text="M:\" VerticalAlignment="Center"/>
-            <Button Grid.Column="2" Content="Browse…" Style="{StaticResource ActionBtn}"
+            <TextBox Grid.Column="1" x:Name="TxtRoot" Text="C:\" VerticalAlignment="Center"/>
+            <ComboBox Grid.Column="2" x:Name="ComboDrives" Margin="6,0,0,0" VerticalAlignment="Center" Height="26"/>
+            <Button Grid.Column="3" Content="Browse…" Style="{StaticResource ActionBtn}"
                     x:Name="BtnBrowse" Margin="6,0,0,0"/>
         </Grid>
 
@@ -168,13 +180,13 @@ if (-not (Get-Module MyBookTools)) {
                 BorderThickness="1" CornerRadius="6">
             <ScrollViewer x:Name="LogScroller" VerticalScrollBarVisibility="Auto">
                 <TextBox x:Name="TxtLog"
-                         IsReadOnly="True" TextWrapping="Wrap"
-                         Background="Transparent" BorderThickness="0"
-                         Foreground="#CDD6F4"
-                         FontFamily="Cascadia Code, Consolas, Monospace"
-                         FontSize="12" Padding="8"
-                         VerticalAlignment="Top"
-                         AcceptsReturn="True"/>
+                          IsReadOnly="True" TextWrapping="Wrap"
+                          Background="Transparent" BorderThickness="0"
+                          Foreground="#CDD6F4"
+                          FontFamily="Cascadia Code, Consolas, Monospace"
+                          FontSize="12" Padding="8"
+                          VerticalAlignment="Top"
+                          AcceptsReturn="True"/>
             </ScrollViewer>
         </Border>
     </Grid>
@@ -195,10 +207,32 @@ $chkDryRun    = $window.FindName('ChkDryRun')
 $chkEmptyDirs = $window.FindName('ChkEmptyDirs')
 $chkCompress  = $window.FindName('ChkCompress')
 $chkDupeRpt   = $window.FindName('ChkDupeRpt')
+$comboDrives  = $window.FindName('ComboDrives')
+
+# ── Populate drives list ──────────────────────────────────────────────────────
+$drives = [System.IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady -and $_.DriveType -in 'Fixed','Removable' }
+foreach ($d in $drives) {
+    $freeGB = [math]::Round($d.AvailableFreeSpace / 1GB, 1)
+    $totalGB = [math]::Round($d.TotalSize / 1GB, 1)
+    $label = "{0} ({1} GB free / {2} GB)" -f $d.Name, $freeGB, $totalGB
+    $comboDrives.Items.Add($label) | Out-Null
+}
+
+if ($comboDrives.Items.Count -gt 0) {
+    $comboDrives.SelectedIndex = 0
+    $txtRoot.Text = $drives[0].Name
+}
+
+$comboDrives.Add_SelectionChanged({
+    $idx = $comboDrives.SelectedIndex
+    if ($idx -ge 0 -and $idx -lt $drives.Count) {
+        $txtRoot.Text = $drives[$idx].Name
+    }
+})
 
 # ── Helper functions ──────────────────────────────────────────────────────────
 function Append-Log {
-    param([string]$Text, [string]$Color = '#CDD6F4')
+    param([string]$Text)
     $ts = Get-Date -Format 'HH:mm:ss'
     $window.Dispatcher.Invoke({
         $txtLog.AppendText("[$ts] $Text`n")
@@ -212,23 +246,6 @@ function Set-Status {
         $txtStatus.Text            = $Text
         $txtStatus.Foreground      = [System.Windows.Media.BrushConverter]::new().ConvertFromString($Color)
     })
-}
-
-function Run-InBackground {
-    param([scriptblock]$Action)
-    $rs = [runspacefactory]::CreateRunspace()
-    $rs.ApartmentState = 'STA'
-    $rs.ThreadOptions  = 'ReuseThread'
-    $rs.Open()
-    $rs.SessionStateProxy.SetVariable('rootPath', $txtRoot.Text)
-    $rs.SessionStateProxy.SetVariable('logFn',    ${function:Append-Log})
-    $ps = [powershell]::Create()
-    $ps.Runspace = $rs
-    $ps.AddScript({
-        Import-Module MyBookTools -ErrorAction SilentlyContinue
-    }) | Out-Null
-    $ps.AddScript($Action) | Out-Null
-    $ps.BeginInvoke() | Out-Null
 }
 
 # ── Browse button ─────────────────────────────────────────────────────────────
@@ -247,8 +264,8 @@ $window.FindName('BtnAudit').Add_Click({
     Append-Log "Starting audit of '$root' (Hashes=$withHashes)"
     $job = Start-Job -ScriptBlock {
         param($r,$h)
-        Import-Module MyBookTools
-        $csv = Invoke-MyBookAuditFast -RootPath $r -IncludeHashes:$h
+        Import-Module DriveTools -Force
+        $csv = Invoke-DriveAuditFast -RootPath $r -IncludeHashes:$h
         "CSV saved to: $csv"
     } -ArgumentList $root,$withHashes
     Register-ObjectEvent $job -EventName StateChanged -Action {
@@ -266,8 +283,8 @@ $window.FindName('BtnHashCache').Add_Click({
     Append-Log "Updating hash cache for '$root'"
     $job = Start-Job -ScriptBlock {
         param($r)
-        Import-Module MyBookTools
-        Update-MyBookHashCache -RootPath $r
+        Import-Module DriveTools -Force
+        Update-DriveHashCache -RootPath $r
     } -ArgumentList $root
     Register-ObjectEvent $job -EventName StateChanged -Action {
         Receive-Job $job -ErrorAction SilentlyContinue | ForEach-Object { Append-Log $_ }
@@ -285,8 +302,8 @@ $window.FindName('BtnCategorize').Add_Click({
     Append-Log "Categorize: root='$root' DryRun=$dryRun"
     $job = Start-Job -ScriptBlock {
         param($r,$d)
-        Import-Module MyBookTools
-        Invoke-MyBookCategorize -RootPath $r -DryRun:$d
+        Import-Module DriveTools -Force
+        Invoke-DriveCategorize -RootPath $r -DryRun:$d
         "Categorization complete."
     } -ArgumentList $root,$dryRun
     Register-ObjectEvent $job -EventName StateChanged -Action {
@@ -310,8 +327,8 @@ $window.FindName('BtnDupes').Add_Click({
     Append-Log "Dedup: root='$root' DryRun=$dryRun"
     $job = Start-Job -ScriptBlock {
         param($r,$d)
-        Import-Module MyBookTools
-        Resolve-MyBookDuplicates -RootPath $r -DryRun:$d
+        Import-Module DriveTools -Force
+        Resolve-DriveDuplicates -RootPath $r -DryRun:$d
         "Dedup complete."
     } -ArgumentList $root,$dryRun
     Register-ObjectEvent $job -EventName StateChanged -Action {
@@ -331,8 +348,8 @@ $window.FindName('BtnCleanup').Add_Click({
     Append-Log "Cleanup: EmptyDirs=$emptyDirs Compress=$compress DupeReport=$dupeRpt"
     $job = Start-Job -ScriptBlock {
         param($r,$e,$c,$d)
-        Import-Module MyBookTools
-        Invoke-MyBookCleanup -RootPath $r `
+        Import-Module DriveTools -Force
+        Invoke-DriveCleanup -RootPath $r `
             -RemoveEmptyDirectories:$e `
             -CompressArchives:$c `
             -ReportDuplicates:$d
@@ -352,8 +369,8 @@ $window.FindName('BtnMap').Add_Click({
     Append-Log "Building visual map for '$root'"
     $job = Start-Job -ScriptBlock {
         param($r)
-        Import-Module MyBookTools
-        $out = Show-MyBookVisualMap -RootPath $r -MaxDepth 4
+        Import-Module DriveTools -Force
+        $out = Show-DriveVisualMap -RootPath $r -MaxDepth 4
         "Map saved — $($out.Count) lines"
     } -ArgumentList $root
     Register-ObjectEvent $job -EventName StateChanged -Action {
@@ -366,9 +383,10 @@ $window.FindName('BtnMap').Add_Click({
 # ── Schedule ──────────────────────────────────────────────────────────────────
 $window.FindName('BtnSchedule').Add_Click({
     Append-Log "Registering daily maintenance task…"
-    Register-MyBookMaintenanceTask -Schedule Daily
-    Append-Log "Task registered: MyBookMaintenance (Daily @ 03:00)"
+    Register-DriveMaintenanceTask -Schedule Daily
+    Append-Log "Task registered: DriveMaintenance (Daily @ 03:00)"
     Set-Status "Idle"
+    Clear-DriveToolsStatus
 })
 
 # ── Clear log ─────────────────────────────────────────────────────────────────
@@ -380,7 +398,7 @@ $window.FindName('BtnClearLog').Add_Click({
 $timer = [System.Windows.Threading.DispatcherTimer]::new()
 $timer.Interval = [TimeSpan]::FromSeconds(2)
 $timer.Add_Tick({
-    $s = Get-MyBookStatus
+    $s = Get-DriveToolsStatus
     if ($s.Operation) {
         Set-Status "$($s.Operation) — $($s.Details)" '#F9E2AF'
     } else {
@@ -390,6 +408,6 @@ $timer.Add_Tick({
 $timer.Start()
 
 # ── Show window ───────────────────────────────────────────────────────────────
-Append-Log "MyBookTools GUI ready. Root='$($txtRoot.Text)'"
+Append-Log "DriveTools GUI ready. Root='$($txtRoot.Text)'"
 [void]$window.ShowDialog()
 $timer.Stop()
