@@ -20,4 +20,4 @@ jobs:
     - name: Run PSScriptAnalyzer
       shell: pwsh
       run: |
-        Invoke-ScriptAnalyzer -Path ./src/MyBookTools.psm1 -Recurse -Severity Warning,Error
+        Invoke-ScriptAnalyzer -Path ./src/DriveTools.psm1 -Recurse -Severity Warning,Error
