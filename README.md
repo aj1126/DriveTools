@@ -1,10 +1,10 @@
 <p align="center">
   <img src="https://img.shields.io/github/v/release/AJ1126/DriveTools?style=for-the-badge" />
-  <img src="https://img.shields.io/github/actions/workflow/status/AJ1126/MyBookTools/ci.yml?style=for-the-badge" />
-  <img src="https://img.shields.io/powershellgallery/v/MyBookTools?style=for-the-badge" />
-  <img src="https://img.shields.io/github/license/AJ1126/MyBookTools?style=for-the-badge" />
-  <img src="https://img.shields.io/github/issues/AJ1126/MyBookTools?style=for-the-badge" />
-  <img src="https://img.shields.io/github/stars/AJ1126/MyBookTools?style=for-the-badge" />
+  <img src="https://img.shields.io/github/actions/workflow/status/AJ1126/DriveTools/ci.yml?style=for-the-badge" />
+  <img src="https://img.shields.io/powershellgallery/v/DriveTools?style=for-the-badge" />
+  <img src="https://img.shields.io/github/license/AJ1126/DriveTools?style=for-the-badge" />
+  <img src="https://img.shields.io/github/issues/AJ1126/DriveTools?style=for-the-badge" />
+  <img src="https://img.shields.io/github/stars/AJ1126/DriveTools?style=for-the-badge" />
 </p>
 
 # 📦 DriveTools
@@ -27,7 +27,7 @@
 | **Duplicate Resolution** | Detects exact duplicates via hash; keeps the newest copy and removes the rest |
 | **Cleanup** | Removes empty directories, reports duplicate groups, compresses the Archives folder |
 | **Visual Tree Map** | Generates a Unicode tree of the drive saved to a `.txt` file |
-| **Real-Time Status** | `Get-MyBookStatus` returns the currently running operation, start time, and details |
+| **Real-Time Status** | `Get-DriveStatus` returns the currently running operation, start time, and details |
 | **Scheduled Maintenance** | Registers a Windows Scheduled Task to run audits automatically (Daily or Hourly) |
 | **WPF GUI** | Optional graphical launcher for all operations — no command line required |
 
@@ -36,15 +36,15 @@
 ## 🗂️ Repository Layout
 
 ```
-MyBookTools/
+DriveTools/
 ├── 2.0/
-│   ├── MyBookTools.psm1        # Module implementation
-│   ├── MyBookTools.psd1        # Module manifest
+│   ├── DriveTools.psm1        # Module implementation
+│   ├── DriveTools.psd1        # Module manifest
 ├── tests/
-│   └── MyBookTools.Tests.ps1   # Pester test suite
+│   └── DriveTools.Tests.ps1   # Pester test suite
 ├── tools/
-│   ├── MyBookTools.GUI.ps1     # WPF graphical launcher
-│   └── Invoke-MyBookBenchmark.ps1  # Performance benchmark script
+│   ├── DriveTools.GUI.ps1     # WPF graphical launcher
+│   └── Invoke-DriveBenchmark.ps1  # Performance benchmark script
 ├── profile-snippet.ps1         # PowerShell profile snippet
 └── README.md
 ```
@@ -56,24 +56,24 @@ MyBookTools/
 ### Option A — Manual (recommended for personal use)
 
 ```powershell
-$dest = "$env:USERPROFILE\Documents\WindowsPowerShell\Modules\MyBookTools\2.0"
+$dest = "$env:USERPROFILE\Documents\WindowsPowerShell\Modules\DriveTools\2.0"
 New-Item -Path $dest -ItemType Directory -Force
-Copy-Item MyBookTools.psm1, MyBookTools.psd1 -Destination $dest
+Copy-Item DriveTools.psm1, DriveTools.psd1 -Destination $dest
 ```
 
 ### Option B — Clone and install
 
 ```powershell
-git clone https://github.com/you/MyBookTools.git
-Set-Location MyBookTools
+git clone https://github.com/you/DriveTools.git
+Set-Location DriveTools
 .\Install.ps1   # copies module to the user module path
 ```
 
 ### Verify installation
 
 ```powershell
-Import-Module MyBookTools
-Get-Module MyBookTools | Select-Object Name, Version, ExportedFunctions
+Import-Module DriveTools
+Get-Module DriveTools | Select-Object Name, Version, ExportedFunctions
 ```
 
 ---
@@ -81,40 +81,40 @@ Get-Module MyBookTools | Select-Object Name, Version, ExportedFunctions
 ## 🚀 Quick Start
 
 ```powershell
-Import-Module MyBookTools
+Import-Module DriveTools
 
 # 1. Audit the drive
-$csv = Invoke-MyBookAuditFast -RootPath M:\ -IncludeHashes
+$csv = Invoke-DriveAuditFast -RootPath M:\ -IncludeHashes
 Write-Host "Report saved to $csv"
 
 # 2. Preview categorization without moving anything
-Invoke-MyBookCategorize -DryRun
+Invoke-DriveCategorize -DryRun
 
 # 3. Apply categorization
-Invoke-MyBookCategorize
+Invoke-DriveCategorize
 
 # 4. Find and remove duplicates (dry-run first!)
-Resolve-MyBookDuplicates -DryRun
-Resolve-MyBookDuplicates
+Resolve-DriveDuplicates -DryRun
+Resolve-DriveDuplicates
 
 # 5. Clean up empty folders
-Invoke-MyBookCleanup -RemoveEmptyDirectories -ReportDuplicates
+Invoke-DriveCleanup -RemoveEmptyDirectories -ReportDuplicates
 
 # 6. View a tree map of the drive
-Show-MyBookVisualMap -MaxDepth 3
+Show-DriveVisualMap -MaxDepth 3
 
 # 7. Schedule nightly maintenance
-Register-MyBookMaintenanceTask -Schedule Daily
+Register-DriveMaintenanceTask -Schedule Daily
 
 # 8. Monitor long-running operations
-Get-MyBookStatus
+Get-DriveStatus
 ```
 
 ---
 
 ## 📋 Command Reference
 
-### `Invoke-MyBookAuditFast`
+### `Invoke-DriveAuditFast`
 
 Scans a drive and exports a CSV with file metadata.
 
@@ -124,7 +124,7 @@ Scans a drive and exports a CSV with file metadata.
 -IncludeHashes   <switch>   Compute SHA256 for every file
 ```
 
-### `Update-MyBookHashCache`
+### `Update-DriveHashCache`
 
 Builds or refreshes a JSON hash cache; unchanged files reuse their stored hash.
 
@@ -133,7 +133,7 @@ Builds or refreshes a JSON hash cache; unchanged files reuse their stored hash.
 -CachePath  <string>   Path to HashCache.json
 ```
 
-### `Invoke-MyBookCategorize`
+### `Invoke-DriveCategorize`
 
 Moves files into category folders based on extension and keyword matching.
 
@@ -154,7 +154,7 @@ Moves files into category folders based on extension and keyword matching.
 | Uploads | `UPLOADS`, `upload`, `.torrent`, `.nfo` |
 | System | `installer`, `setup`, `.msi`, `.exe`, `.dll`, `.log` |
 
-### `Resolve-MyBookDuplicates`
+### `Resolve-DriveDuplicates`
 
 Hashes all files, groups identical hashes, keeps the newest copy.
 
@@ -163,7 +163,7 @@ Hashes all files, groups identical hashes, keeps the newest copy.
 -DryRun    <switch>  Log what would be deleted without deleting
 ```
 
-### `Invoke-MyBookCleanup`
+### `Invoke-DriveCleanup`
 
 Composite cleanup: empty directories, duplicate reports, archive compression.
 
@@ -173,7 +173,7 @@ Composite cleanup: empty directories, duplicate reports, archive compression.
 -CompressArchives        <switch>  Zip the Archives\ subfolder
 ```
 
-### `Show-MyBookVisualMap`
+### `Show-DriveVisualMap`
 
 Renders a Unicode tree of the directory structure.
 
@@ -183,16 +183,16 @@ Renders a Unicode tree of the directory structure.
 -OutputPath  <string>  Where to save the .txt file
 ```
 
-### `Register-MyBookMaintenanceTask`
+### `Register-DriveMaintenanceTask`
 
-Registers a Windows Scheduled Task that calls `Invoke-MyBookAuditFast` automatically.
+Registers a Windows Scheduled Task that calls `Invoke-DriveAuditFast` automatically.
 
 ```
--TaskName  <string>  Task name (default: MyBookMaintenance)
+-TaskName  <string>  Task name (default: DriveMaintenance)
 -Schedule  <string>  Daily | Hourly
 ```
 
-### `Get-MyBookStatus`
+### `Get-DriveStatus`
 
 Returns the currently active operation, start time, and last-update timestamp.
 
@@ -203,13 +203,13 @@ Returns the currently active operation, start time, and last-update timestamp.
 All operations write to daily log files:
 
 ```
-%USERPROFILE%\Documents\MyBookLogs\MyBook_YYYY-MM-DD.log
+%USERPROFILE%\Documents\DriveLogs\Drive_YYYY-MM-DD.log
 ```
 
 Hash cache is stored at:
 
 ```
-%USERPROFILE%\Documents\MyBookLogs\MyBook_HashCache.json
+%USERPROFILE%\Documents\DriveLogs\Drive_HashCache.json
 ```
 
 ---
@@ -220,7 +220,7 @@ Requires [Pester 5](https://pester.dev/docs/introduction/installation).
 
 ```powershell
 Install-Module Pester -Force -SkipPublisherCheck
-Invoke-Pester .\tests\MyBookTools.Tests.ps1 -Output Detailed
+Invoke-Pester .\tests\DriveTools.Tests.ps1 -Output Detailed
 ```
 
 ---
@@ -230,7 +230,7 @@ Invoke-Pester .\tests\MyBookTools.Tests.ps1 -Output Detailed
 Launch the graphical interface with:
 
 ```powershell
-.\tools\MyBookTools.GUI.ps1
+.\tools\DriveTools.GUI.ps1
 ```
 
 The GUI provides one-click access to all operations, a live status display, and a log viewer.
@@ -242,9 +242,9 @@ The GUI provides one-click access to all operations, a live status display, and 
 You can override the default drive root and log path in your profile or before importing the module by editing the module variables after import:
 
 ```powershell
-Import-Module MyBookTools
+Import-Module DriveTools
 # Point to a different drive
-(Get-Module MyBookTools).Invoke({ $Script:MyBook_DefaultRoot = 'E:\' })
+(Get-Module DriveTools).Invoke({ $Script:Drive_DefaultRoot = 'E:\' })
 ```
 
 Or supply `-RootPath` on every call.
