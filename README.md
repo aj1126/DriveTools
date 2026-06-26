@@ -7,7 +7,7 @@
   <img src="https://img.shields.io/github/stars/AJ1126/MyBookTools?style=for-the-badge" />
 </p>
 
-# 📦 MyBookTools
+# 📦 DriveTools
 
 > A PowerShell module for auditing, organizing, deduplicating, and maintaining large external drives (3 TB+).
 
