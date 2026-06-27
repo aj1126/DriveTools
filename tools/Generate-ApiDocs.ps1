@@ -1,7 +1,7 @@
-$module = Import-Module ../src/MyBookTools.psm1 -Force -PassThru
+$module = Import-Module ../src/DriveTools.psm1 -Force -PassThru
 $commands = $module.ExportedFunctions.Keys
 
-$apiPath = "../docs/api/MyBookTools.md"
+$apiPath = "../docs/api/DriveTools.md"
 Remove-Item $apiPath -ErrorAction SilentlyContinue
 
 foreach ($cmd in $commands) {

@@ -1,6 +1,6 @@
 ---
 name: Feature Request
-about: Suggest an improvement for MyBookTools
+about: Suggest an improvement for DriveTools
 labels: enhancement
 ---
 

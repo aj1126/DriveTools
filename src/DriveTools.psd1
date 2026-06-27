@@ -15,7 +15,7 @@ Author            = 'Albert'
 CompanyName       = ''
 Copyright         = '(c) 2025 Albert. MIT License.'
 Description       = 'Drive auditing, categorization, deduplication, cleanup, and scheduled maintenance for local, external, or other system storage drives.'
-Tags              = @('Drive','Audit','Deduplicate','Categorize','Maintenance','Storage','Cleanup')
+
 
 # ── Requirements ──────────────────────────────────────────────────────────────
 PowerShellVersion = '5.1'
@@ -34,6 +34,7 @@ FunctionsToExport = @(
     'Set-DriveToolsStatus'
     'Clear-DriveToolsStatus'
     'Get-DriveToolsRootPath'
+    'Get-DriveScanPrediction'
 )
 
 CmdletsToExport   = @()

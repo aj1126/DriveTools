@@ -14,8 +14,8 @@ jobs:
 
     - name: Import Code Signing Certificate
       run: |
-        $cert = Import-PfxCertificate -FilePath certs/MyBookTools.pfx -Password (ConvertTo-SecureString "${{ secrets.CERT_PASSWORD }}" -AsPlainText -Force) -CertStoreLocation Cert:\CurrentUser\My
+        $cert = Import-PfxCertificate -FilePath certs/DriveTools.pfx -Password (ConvertTo-SecureString "${{ secrets.CERT_PASSWORD }}" -AsPlainText -Force) -CertStoreLocation Cert:\CurrentUser\My
 
     - name: Sign Module
       run: |
-        Set-AuthenticodeSignature -FilePath src/MyBookTools.psm1 -Certificate $cert
+        Set-AuthenticodeSignature -FilePath src/DriveTools.psm1 -Certificate $cert

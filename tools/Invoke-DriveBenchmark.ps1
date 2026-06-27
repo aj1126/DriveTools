@@ -1,36 +1,36 @@
-#Requires -Version 5.1
-#Requires -Modules MyBookTools
+﻿#Requires -Version 5.1
+
 <#
 .SYNOPSIS
-    MyBookTools Performance Benchmark
+    DriveTools Performance Benchmark
 
 .DESCRIPTION
-    Measures wall-clock time and memory delta for each major MyBookTools
+    Measures wall-clock time and memory delta for each major DriveTools
     operation against a synthetic test tree.  Results are printed to the
     console and exported to a CSV on the Desktop.
 
 .PARAMETER TestRoot
     Temporary directory used as the synthetic "drive".
-    Defaults to a folder in $env:TEMP — cleaned up automatically.
+    Defaults to a folder in $env:TEMP - cleaned up automatically.
 
 .PARAMETER FilesPerCategory
     Number of dummy files to create per category.
     Increase for more realistic large-drive simulations.
 
 .EXAMPLE
-    .\Invoke-MyBookBenchmark.ps1
-    .\Invoke-MyBookBenchmark.ps1 -FilesPerCategory 500
+    .\Invoke-DriveBenchmark.ps1
+    .\Invoke-DriveBenchmark.ps1 -FilesPerCategory 500
 #>
 param(
-    [string]$TestRoot          = (Join-Path $env:TEMP "MyBookBenchmark_$(Get-Random)"),
+    [string]$TestRoot          = (Join-Path $env:TEMP "DriveBenchmark_$(Get-Random)"),
     [int]   $FilesPerCategory  = 50,
-    [string]$ResultCsvPath     = "$env:USERPROFILE\Desktop\MyBookBenchmark_$(Get-Date -f yyyyMMdd_HHmmss).csv"
+    [string]$ResultCsvPath     = "$env:USERPROFILE\Desktop\DriveBenchmark_$(Get-Date -f yyyyMMdd_HHmmss).csv"
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-Import-Module MyBookTools -Force
+Import-Module (Join-Path $PSScriptRoot '../src/DriveTools.psd1') -Force
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 function New-BenchmarkTree {
@@ -68,7 +68,7 @@ function New-BenchmarkTree {
 
     # Seed a few intentional duplicates
     $dup = Join-Path $dirs[0] 'duplicate_original.wav'
-    [System.IO.File]::WriteAllBytes($dup, [byte[]](1..512))
+    [System.IO.File]::WriteAllBytes($dup, [byte[]](1..255))
     Copy-Item $dup (Join-Path $dirs[1] 'duplicate_copy1.wav')
     Copy-Item $dup (Join-Path $dirs[2] 'duplicate_copy2.wav')
 
@@ -109,7 +109,7 @@ function Measure-Operation {
 }
 
 # ── Setup ─────────────────────────────────────────────────────────────────────
-Write-Host "`n  MyBookTools Performance Benchmark" -ForegroundColor Cyan
+Write-Host "`n  DriveTools Performance Benchmark" -ForegroundColor Cyan
 Write-Host "  ══════════════════════════════════" -ForegroundColor DarkGray
 Write-Host "  Test root       : $TestRoot"
 Write-Host "  Files / category: $FilesPerCategory"
@@ -125,48 +125,48 @@ $cachePath = Join-Path $TestRoot 'BenchHashCache.json'
 
 # ── Benchmark operations ──────────────────────────────────────────────────────
 
-$results.Add((Measure-Operation "Invoke-MyBookAuditFast (no hashes)" {
-    Invoke-MyBookAuditFast -RootPath $TestRoot `
+$results.Add((Measure-Operation "Invoke-DriveAuditFast (no hashes)" {
+    Invoke-DriveAuditFast -RootPath $TestRoot `
         -OutputCsvPath (Join-Path $TestRoot 'AuditFast_noHash.csv')
 }))
 
-$results.Add((Measure-Operation "Invoke-MyBookAuditFast (with hashes)" {
-    Invoke-MyBookAuditFast -RootPath $TestRoot -IncludeHashes `
+$results.Add((Measure-Operation "Invoke-DriveAuditFast (with hashes)" {
+    Invoke-DriveAuditFast -RootPath $TestRoot -IncludeHashes `
         -OutputCsvPath (Join-Path $TestRoot 'AuditFast_withHash.csv')
 }))
 
-$results.Add((Measure-Operation "Update-MyBookHashCache (cold — no cache)" {
+$results.Add((Measure-Operation "Update-DriveHashCache (cold - no cache)" {
     Remove-Item $cachePath -ErrorAction SilentlyContinue
-    Update-MyBookHashCache -RootPath $TestRoot -CachePath $cachePath
+    Update-DriveHashCache -RootPath $TestRoot -CachePath $cachePath
 }))
 
-$results.Add((Measure-Operation "Update-MyBookHashCache (warm — cache exists)" {
-    Update-MyBookHashCache -RootPath $TestRoot -CachePath $cachePath
+$results.Add((Measure-Operation "Update-DriveHashCache (warm - cache exists)" {
+    Update-DriveHashCache -RootPath $TestRoot -CachePath $cachePath
 }))
 
-$results.Add((Measure-Operation "Show-MyBookVisualMap (depth 5)" {
-    Show-MyBookVisualMap -RootPath $TestRoot -MaxDepth 5 `
+$results.Add((Measure-Operation "Show-DriveVisualMap (depth 5)" {
+    Show-DriveVisualMap -RootPath $TestRoot -MaxDepth 5 `
         -OutputPath (Join-Path $TestRoot 'VisualMap.txt')
 }))
 
-$results.Add((Measure-Operation "Invoke-MyBookCategorize (DryRun)" {
-    Invoke-MyBookCategorize -RootPath $TestRoot -DryRun
+$results.Add((Measure-Operation "Invoke-DriveCategorize (DryRun)" {
+    Invoke-DriveCategorize -RootPath $TestRoot -DryRun
 }))
 
-$results.Add((Measure-Operation "Resolve-MyBookDuplicates (DryRun)" {
-    Resolve-MyBookDuplicates -RootPath $TestRoot -DryRun
+$results.Add((Measure-Operation "Resolve-DriveDuplicates (DryRun)" {
+    Resolve-DriveDuplicates -RootPath $TestRoot -DryRun
 }))
 
-$results.Add((Measure-Operation "Invoke-MyBookCleanup -RemoveEmptyDirectories" {
-    Invoke-MyBookCleanup -RootPath $TestRoot -RemoveEmptyDirectories -WhatIf
+$results.Add((Measure-Operation "Invoke-DriveCleanup -RemoveEmptyDirectories" {
+    Invoke-DriveCleanup -RootPath $TestRoot -RemoveEmptyDirectories -WhatIf
 }))
 
-$results.Add((Measure-Operation "Invoke-MyBookCleanup -ReportDuplicates" {
-    Invoke-MyBookCleanup -RootPath $TestRoot -ReportDuplicates -WhatIf
+$results.Add((Measure-Operation "Invoke-DriveCleanup -ReportDuplicates" {
+    Invoke-DriveCleanup -RootPath $TestRoot -ReportDuplicates -WhatIf
 }))
 
-$results.Add((Measure-Operation "Get-MyBookStatus (status poll × 1000)" {
-    1..1000 | ForEach-Object { Get-MyBookStatus } | Out-Null
+$results.Add((Measure-Operation "Get-DriveToolsStatus (status poll x 1000)" {
+    1..1000 | ForEach-Object { Get-DriveToolsStatus } | Out-Null
 }))
 
 # ── Print results ─────────────────────────────────────────────────────────────
@@ -189,3 +189,4 @@ Write-Host "`n  CSV saved to: $ResultCsvPath" -ForegroundColor Green
 # ── Teardown ──────────────────────────────────────────────────────────────────
 Remove-Item $TestRoot -Recurse -Force -ErrorAction SilentlyContinue
 Write-Host "  Test tree cleaned up.`n" -ForegroundColor DarkGray
+

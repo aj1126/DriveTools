@@ -52,3 +52,23 @@
 ## 8. Artifact and Workspace File Operations
 - **Artifact Directory Bounds**: Always write user-facing reports, plan documents, and walk-throughs in the designated conversation brain directory `C:\Users\ajjuk\.gemini\antigravity\brain\<conversation-id>/` and provide `ArtifactMetadata`.
 - **Workspace Files**: Never provide `ArtifactMetadata` when creating or modifying files inside the user's workspace directory (e.g. source files, `.vscode/settings.json`, `.cursorrules`).
+
+## 9. Module Manifest (.psd1) Constraints
+- **No Top-Level Tags Key**: Windows PowerShell 5.1 does not support a root-level `Tags` key in `.psd1` manifests. Placing it at the root will cause module import failures. Always place tags inside the `PrivateData.PSData.Tags` array:
+  ```powershell
+  PrivateData = @{
+      PSData = @{
+          Tags = @('Drive', 'Audit')
+      }
+  }
+  ```
+
+## 10. Casting Byte Arrays Safely
+- **Byte Casting Limit**: Casting an integer array to a byte array (e.g. `[byte[]](1..512)`) in PowerShell will throw an overflow exception for any integer greater than 255. When creating mock/dummy files, ensure range boundaries are within `0-255` (e.g. `1..255`) or use `[byte[]]` arrays filled with random bytes:
+  ```powershell
+  $bytes = New-Object byte[] 512
+  (New-Object System.Random).NextBytes($bytes)
+  ```
+
+## 11. Early Validation of Test Paths
+- **Fail Fast on Invalid Input**: Functions that support interactive fallback selection menus (like `Read-Host` drive selection) must validate input path parameters first. If an invalid or non-existent path is passed, throw an error immediately instead of falling back to the interactive menu, preventing automated tests from hanging indefinitely.

@@ -1,19 +1,22 @@
 # Commands
 
-## Invoke-MyBookAuditFast
+## Invoke-DriveAuditFast
 Fast audit with optional hashing.
 
-## Invoke-MyBookCategorize
+## Invoke-DriveCategorize
 Categorizes files using the default or custom CategoryMap.
 
-## Resolve-MyBookDuplicates
+## Resolve-DriveDuplicates
 Keeps newest duplicate, deletes older ones.
 
-## Invoke-MyBookCleanup
+## Invoke-DriveCleanup
 Removes empty directories, reports duplicates, compresses archives.
 
-## Show-MyBookVisualMap
+## Show-DriveVisualMap
 ASCII tree map of the drive.
 
-## Register-MyBookMaintenanceTask
+## Register-DriveMaintenanceTask
 Creates a scheduled task for daily maintenance.
+
+## Get-DriveScanPrediction
+Predicts scan traversal and hashing duration.

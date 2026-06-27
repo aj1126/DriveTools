@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory)][string]$NewVersion
 )
 
-$manifest = Join-Path $PSScriptRoot '../src/MyBookTools.psd1'
+$manifest = Join-Path $PSScriptRoot '../src/DriveTools.psd1'
 $psd1 = Get-Content $manifest -Raw
 
 $psd1 = $psd1 -replace "ModuleVersion\s*=\s*'[^']+'", "ModuleVersion = '$NewVersion'"

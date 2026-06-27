@@ -4,8 +4,8 @@
 
 Copy the `src/` folder to:
 
-$env:USERPROFILE\Documents\WindowsPowerShell\Modules\MyBookTools\2.0\
+$env:USERPROFILE\Documents\WindowsPowerShell\Modules\DriveTools\2.0\
 
 ## PowerShell Gallery (future)
 
-Install-Module MyBookTools
+Install-Module DriveTools

@@ -1,17 +1,15 @@
 # Examples
 
 ## Fast audit
-
-Invoke-MyBookAuditFast -IncludeHashes
-
+Invoke-DriveAuditFast -IncludeHashes
 
 ## Categorization
-
-Invoke-MyBookCategorize -DryRun
-Invoke-MyBookCategorize
-
+Invoke-DriveCategorize -DryRun
+Invoke-DriveCategorize
 
 ## Duplicate resolution
+Resolve-DriveDuplicates -DryRun
+Resolve-DriveDuplicates
 
-
-Resolve-MyBookDuplicates -DryRun
+## Duration prediction
+Get-DriveScanPrediction -RootPath M:\ -IncludeHashes

@@ -398,8 +398,8 @@ $window.FindName('BtnPredict').Add_Click({
     Append-Log "Starting scan duration prediction for '$root' (Hashes=$withHashes)"
     $job = Start-Job -ScriptBlock {
         param($r,$h)
-        Import-Module MyBookTools
-        Get-MyBookScanPrediction -RootPath $r -IncludeHashes:$h
+        Import-Module DriveTools
+        Get-DriveScanPrediction -RootPath $r -IncludeHashes:$h
     } -ArgumentList $root,$withHashes
     Register-ObjectEvent $job -EventName StateChanged -Action {
         $prediction = $job | Receive-Job -ErrorAction SilentlyContinue

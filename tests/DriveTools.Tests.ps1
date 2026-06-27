@@ -12,7 +12,7 @@ Describe "DriveTools Module" {
             'Write-DriveToolsLog','Set-DriveToolsStatus','Clear-DriveToolsStatus','Get-DriveToolsStatus',
             'Show-DriveVisualMap','Update-DriveHashCache','Invoke-DriveAuditFast',
             'Invoke-DriveCategorize','Resolve-DriveDuplicates','Invoke-DriveCleanup',
-            'Register-DriveMaintenanceTask','Get-DriveToolsRootPath'
+            'Register-DriveMaintenanceTask','Get-DriveToolsRootPath','Get-DriveScanPrediction'
         )
         foreach ($fn in $expected) {
             $cmd = Get-Command $fn -ErrorAction SilentlyContinue
@@ -107,5 +107,23 @@ Describe "Production Operations (Real Local Directory)" {
         New-Item -Path (Join-Path $Script:TestTempDir "EmptyFolder") -ItemType Directory | Out-Null
         { Invoke-DriveCleanup -RootPath $Script:TestTempDir -RemoveEmptyDirectories } | Should Not Throw
         Test-Path (Join-Path $Script:TestTempDir "EmptyFolder") | Should Be $false
+    }
+
+    It "estimates scan duration for a path" {
+        $prediction = Get-DriveScanPrediction -RootPath $Script:TestTempDir
+        $prediction.EstimatedFileCount | Should Be 2
+        $prediction.IncludeHashes | Should Be $false
+        $prediction.TotalEstimatedDuration.TotalSeconds | Should BeGreaterThan 0
+    }
+
+    It "estimates scan duration with hashes" {
+        $prediction = Get-DriveScanPrediction -RootPath $Script:TestTempDir -IncludeHashes
+        $prediction.EstimatedFileCount | Should Be 2
+        $prediction.IncludeHashes | Should Be $true
+        $prediction.TotalEstimatedDuration.TotalSeconds | Should BeGreaterThan 0
+    }
+
+    It "throws error on invalid path" {
+        { Get-DriveScanPrediction -RootPath "C:\NonExistentFolder_$(Get-Random)" } | Should Throw
     }
 }
