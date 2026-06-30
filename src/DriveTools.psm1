@@ -1417,3 +1417,4 @@ Invoke-DriveAuditFast | Out-Null
 # =====================================================================
 
 Export-ModuleMember -Function *-Drive*, Get-DriveToolsStatus, Set-DriveToolsStatus, Clear-DriveToolsStatus, Write-DriveToolsLog, Get-DriveToolsRootPath
+
