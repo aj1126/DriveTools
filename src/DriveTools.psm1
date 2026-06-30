@@ -357,7 +357,6 @@ function Update-DriveHashCache {
                 }
 
                 $totalProcessed++
-                # UI Telemetry Modulation: Update progress every 5000 file node records
                 if ($totalProcessed % 5000 -eq 0) {
                     $progressArgs = @('Update-DriveHashCache (WizTree Engine)', "Processed nodes count: $totalProcessed", $totalProcessed)
                     Write-Progress -Activity $progressArgs[0] -Status $progressArgs[1] -Id 1
@@ -385,6 +384,11 @@ function Update-DriveHashCache {
 
                 if (-not $cacheHit) {
                     try {
+                        # Active I/O Telemetry Intercept for Heavy Asset Nodes
+                        if ($length -gt 52428800) {
+                            $mbSize = [math]::Round($length / 1MB, 2)
+                            Write-Verbose ("  [Heavy I/O Checksum] Hashing large asset node ({0} MB): {1}" -f $mbSize, $filePath)
+                        }
                         $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
                     } catch {
                         # PSAvoidEmptyCatchBlock explanation: Suppress read locked operational nodes safely
@@ -458,6 +462,10 @@ function Update-DriveHashCache {
 
                         if (-not $cacheHit) {
                             try {
+                                if ($length -gt 52428800) {
+                                    $mbSize = [math]::Round($length / 1MB, 2)
+                                    Write-Verbose ("  [Heavy I/O Checksum] Hashing large asset node ({0} MB): {1}" -f $mbSize, $filePath)
+                                }
                                 $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
                             } catch {
                                 $hash = $null
@@ -585,6 +593,10 @@ function Invoke-DriveAuditFast {
                 $hash = $null
                 if ($IncludeHashes) {
                     try {
+                        if ($len -gt 52428800) {
+                            $mbSize = [math]::Round($len / 1MB, 2)
+                            Write-Verbose ("  [Heavy I/O Checksum] Hashing large asset node ({0} MB): {1}" -f $mbSize, $filePath)
+                        }
                         $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
                     } catch {
                         # PSAvoidEmptyCatchBlock explanation: Skip logging transient file reads cleanly
@@ -623,9 +635,14 @@ function Invoke-DriveAuditFast {
                 foreach ($filePath in $filePaths) {
                     try {
                         $fileInfo = New-Object System.IO.FileInfo($filePath)
+                        $len = $fileInfo.Length
                         $hash = $null
                         if ($IncludeHashes) {
                             try { 
+                                if ($len -gt 52428800) {
+                                    $mbSize = [math]::Round($len / 1MB, 2)
+                                    Write-Verbose ("  [Heavy I/O Checksum] Hashing large asset node ({0} MB): {1}" -f $mbSize, $filePath)
+                                }
                                 $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash 
                             } catch { 
                                 # PSAvoidEmptyCatchBlock explanation: Skip access flags
@@ -641,7 +658,6 @@ function Invoke-DriveAuditFast {
 
                         $escapedPath = $filePath -replace '"', '""'
                         $ext = $fileInfo.Extension
-                        $len = $fileInfo.Length
                         $time = $fileInfo.LastWriteTime.ToString('o')
 
                         $fmtArgs = @($escapedPath, $len, $ext, $time, $hash)
