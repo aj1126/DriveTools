@@ -149,7 +149,7 @@ function Set-DriveToolsStatus {
         $statusFile = Join-Path $Script:DriveTools_DefaultLogRoot 'DriveTools_Status.json'
         $Script:DriveTools_Status | ConvertTo-Json | Set-Content -Path $statusFile -Encoding UTF8
     } catch {
-        # PSAvoidEmptyCatchBlock: Ignore serialization locks safely
+        # PSAvoidEmptyCatchBlock: Ignore serialization locks
     }
 }
 
@@ -322,12 +322,12 @@ function Update-DriveHashCache {
             $MaxThreads = [Math]::Min([int][Environment]::ProcessorCount, [int]4)
             
             Write-Verbose ("[Asynchronous Engine] Initializing RunspacePool with $MaxThreads I/O optimized threads...")
-            $iss = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault2()
-            $Pool = [runspacefactory]::CreateRunspacePool(1, $MaxThreads, $iss)
+            # Native 2-argument overload skips ISE/VSCode $Host crashes
+            $Pool = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspacePool(1, $MaxThreads)
             $Pool.Open()
             
             for ($i = 0; $i -lt $MaxThreads; $i++) {
-                $PowerShell = [PowerShell]::Create()
+                $PowerShell = [System.Management.Automation.PowerShell]::Create()
                 $PowerShell.RunspacePool = $Pool
                 [void]$PowerShell.AddScript({
                     param($InputQueue, $OutputQueue, $State)
@@ -346,6 +346,7 @@ function Update-DriveHashCache {
                             }
                             try {
                                 if ([System.IO.File]::Exists($item.Path)) {
+                                    # Massive 4MB streaming buffer bypasses native Get-FileHash chunking limitations
                                     $stream = New-Object System.IO.FileStream($item.Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite, 4194304)
                                     $hashBytes = $sha.ComputeHash($stream)
                                     $stream.Close()
@@ -400,6 +401,7 @@ function Update-DriveHashCache {
                 $fields = $parser.ReadFields()
                 if (-not $fields -or $fields.Count -lt 5) { continue }
 
+                # Explicit CSV Index Parsing
                 $filePath = $fields[0]
                 $length = [int64]0
                 if (-not [int64]::TryParse($fields[1], [ref]$length)) { continue }
@@ -411,6 +413,7 @@ function Update-DriveHashCache {
                     $lastWrite = $parsedDate.ToString('o')
                 }
 
+                # Safe Guard: Skip Reparse Points and Symlinks that cause infinite deadlocks
                 $attributes = ""
                 if ($fields.Count -gt 4) { $attributes = $fields[4] }
                 if ($attributes -match "L") { continue }
@@ -418,7 +421,7 @@ function Update-DriveHashCache {
                 $totalProcessed++
                 if ($totalProcessed % 5000 -eq 0) {
                     $progressMsg = "Processed: $totalProcessed (Hits: $cacheHitsCount, Misses: $cacheMissesCount)"
-                    Write-Progress -Activity 'DriveTools Cache Engine' -Status $progressMsg -Id 1
+                    Write-Progress -Activity 'Update-DriveHashCache (WizTree Engine)' -Status $progressMsg -Id 1
                 }
 
                 $hash = $null
@@ -451,7 +454,7 @@ function Update-DriveHashCache {
                                 $activeWorkers = 0
                                 foreach ($w in $Workers) { if (-not $w.Handle.IsCompleted) { $activeWorkers++ } }
                                 $msg = "I/O Throttle: $activeWorkers/$MaxThreads workers hashing $($SyncInput.Count) pending files..."
-                                Write-Progress -Activity 'DriveTools Cache Engine' -Status $msg -Id 1
+                                Write-Progress -Activity 'Update-DriveHashCache' -Status $msg -Id 1
                                 Write-Verbose "  [Backpressure] $msg"
                             }
                             [System.Threading.Thread]::Sleep(30)
@@ -533,7 +536,7 @@ function Update-DriveHashCache {
                         $totalProcessed++
                         if ($totalProcessed % 5000 -eq 0) {
                             $progressMsg = "Processed: $totalProcessed (Hits: $cacheHitsCount, Misses: $cacheMissesCount)"
-                            Write-Progress -Activity 'DriveTools Cache Engine' -Status $progressMsg -Id 1
+                            Write-Progress -Activity 'Update-DriveHashCache (Queue Engine)' -Status $progressMsg -Id 1
                         }
 
                         $pCheckName.Value = $filePath
@@ -565,7 +568,7 @@ function Update-DriveHashCache {
                                         $activeWorkers = 0
                                         foreach ($w in $Workers) { if (-not $w.Handle.IsCompleted) { $activeWorkers++ } }
                                         $msg = "I/O Throttle: $activeWorkers/$MaxThreads workers hashing $($SyncInput.Count) pending files..."
-                                        Write-Progress -Activity 'DriveTools Cache Engine' -Status $msg -Id 1
+                                        Write-Progress -Activity 'Update-DriveHashCache' -Status $msg -Id 1
                                         Write-Verbose "  [Backpressure] $msg"
                                     }
                                     [System.Threading.Thread]::Sleep(30)
@@ -640,7 +643,7 @@ function Update-DriveHashCache {
                 foreach ($w in $Workers) { if (-not $w.Handle.IsCompleted) { $activeWorkers++ } }
                 
                 $msg = "Finalizing: $($SyncInput.Count) remaining files across $activeWorkers active threads..."
-                Write-Progress -Activity 'DriveTools Cache Engine' -Status $msg -Id 1
+                Write-Progress -Activity 'Update-DriveHashCache' -Status $msg -Id 1
                 
                 if ($activeWorkers -eq 0 -and $SyncOutput.Count -eq 0) { break }
                 [System.Threading.Thread]::Sleep(30)
@@ -677,7 +680,7 @@ function Update-DriveHashCache {
         [System.GC]::Collect()
         [System.GC]::WaitForPendingFinalizers()
         
-        Write-Progress -Activity 'DriveTools Cache Engine' -Completed -Id 1
+        Write-Progress -Activity 'Update-DriveHashCache' -Completed -Id 1
         Clear-DriveToolsStatus
     }
 
@@ -746,12 +749,11 @@ function Invoke-DriveAuditFast {
             $SyncState = [Hashtable]::Synchronized(@{ IsProducerDone = $false })
             $MaxThreads = [Math]::Min([int][Environment]::ProcessorCount, [int]4)
             
-            $iss = [System.Management.Automation.Runspaces.InitialSessionState]::CreateDefault2()
-            $Pool = [RunspaceFactory]::CreateRunspacePool(1, $MaxThreads, $iss)
+            $Pool = [System.Management.Automation.Runspaces.RunspaceFactory]::CreateRunspacePool(1, $MaxThreads)
             $Pool.Open()
             
             for ($i = 0; $i -lt $MaxThreads; $i++) {
-                $PowerShell = [PowerShell]::Create()
+                $PowerShell = [System.Management.Automation.PowerShell]::Create()
                 $PowerShell.RunspacePool = $Pool
                 [void]$PowerShell.AddScript({
                     param($InputQueue, $OutputQueue, $State)
@@ -783,8 +785,6 @@ function Invoke-DriveAuditFast {
                             }
                             try { $OutputQueue.Enqueue($item) } catch { }
                         }
-                    } catch {
-                        # PSAvoidEmptyCatchBlock: Safely capture catastrophic thread termination bounds
                     } finally {
                         if ($null -ne $sha) { $sha.Dispose() }
                     }
@@ -838,7 +838,7 @@ function Invoke-DriveAuditFast {
                 $totalProcessed++
                 if ($totalProcessed % 5000 -eq 0) {
                     $progressMsg = "Audited: $totalProcessed (Hits: $cacheHits, Misses: $cacheMisses)"
-                    Write-Progress -Activity 'DriveTools Audit Engine' -Status $progressMsg -Id 2
+                    Write-Progress -Activity 'Invoke-DriveAuditFast (WizTree Engine)' -Status $progressMsg -Id 2
                 }
 
                 $hash = $null
@@ -867,7 +867,7 @@ function Invoke-DriveAuditFast {
                                     $activeWorkers = 0
                                     foreach ($w in $Workers) { if (-not $w.Handle.IsCompleted) { $activeWorkers++ } }
                                     $msg = "I/O Throttle: $activeWorkers/$MaxThreads workers hashing $($SyncInput.Count) pending files..."
-                                    Write-Progress -Activity 'DriveTools Audit Engine' -Status $msg -Id 2
+                                    Write-Progress -Activity 'Invoke-DriveAuditFast' -Status $msg -Id 2
                                     Write-Verbose "  [Backpressure] $msg"
                                 }
                                 [System.Threading.Thread]::Sleep(30)
@@ -945,7 +945,7 @@ function Invoke-DriveAuditFast {
                         $totalProcessed++
                         if ($totalProcessed % 5000 -eq 0) {
                             $progressMsg = "Audited rows count: $totalProcessed"
-                            Write-Progress -Activity 'DriveTools Audit Engine' -Status $progressMsg -Id 2
+                            Write-Progress -Activity 'Invoke-DriveAuditFast (Queue Engine)' -Status $progressMsg -Id 2
                         }
 
                         if ($IncludeHashes) {
@@ -973,7 +973,7 @@ function Invoke-DriveAuditFast {
                                             $activeWorkers = 0
                                             foreach ($w in $Workers) { if (-not $w.Handle.IsCompleted) { $activeWorkers++ } }
                                             $msg = "I/O Throttle: $activeWorkers/$MaxThreads workers hashing $($SyncInput.Count) pending files..."
-                                            Write-Progress -Activity 'DriveTools Audit Engine' -Status $msg -Id 2
+                                            Write-Progress -Activity 'Invoke-DriveAuditFast' -Status $msg -Id 2
                                             Write-Verbose "  [Backpressure] $msg"
                                         }
                                         [System.Threading.Thread]::Sleep(30)
@@ -1068,7 +1068,7 @@ function Invoke-DriveAuditFast {
         [System.GC]::Collect()
         [System.GC]::WaitForPendingFinalizers()
         
-        Write-Progress -Activity 'DriveTools Audit Engine' -Completed -Id 2
+        Write-Progress -Activity 'Invoke-DriveAuditFast' -Completed -Id 2
         Clear-DriveToolsStatus
     }
     
