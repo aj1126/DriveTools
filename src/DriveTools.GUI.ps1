@@ -35,8 +35,10 @@ if (-not (Get-Module DriveTools)) {
     $ModulePathToLoad = (Get-Module DriveTools).Path
 }
 
-# Global tracker for the running async runspace thread pipeline
-$Script:ActivePowerShellInstance = $null
+# Thread-Safe Shared Context State Capsule to bridge UI and Task threads
+$Script:GuiContext = [hashtable]::Synchronized(@{
+    ActivePowerShell = $null
+})
 
 # ── XAML layout ──────────────────────────────────────────────────────────────
 [xml]$xaml = @'
@@ -260,7 +262,7 @@ function Set-Status {
     })
 }
 
-# In-Process Multi-Thread Safe Task Invoker with Explicit Action Type Delegation
+# In-Process Multi-Thread Safe Task Invoker (Explicit [Action] block conversion)
 function Invoke-AsyncGuiTask {
     param(
         [ScriptBlock]$Script,
@@ -271,57 +273,57 @@ function Invoke-AsyncGuiTask {
             $progressBar.Visibility = 'Visible'
             $progressBar.IsIndeterminate = $true
         }
-        if ($btnCancel) {
-            $btnCancel.Visibility = 'Visible'
-        }
+        if ($btnCancel) { $btnCancel.Visibility = 'Visible' }
     })
     
-    # Explicit [Action] cast removes delegate type choice ambiguity in PS 5.1
+    # Instantiate the instance on the UI thread to freeze and cache the reference context safely
+    $PowerShellInstance = [System.Management.Automation.PowerShell]::Create()
+    [void]$PowerShellInstance.AddScript($Script)
+    if ($null -ne $ArgumentList) {
+        foreach ($arg in $ArgumentList) { [void]$PowerShellInstance.AddArgument($arg) }
+    }
+    
+    # Store reference inside the cross-thread context state capsule
+    $Script:GuiContext.ActivePowerShell = $PowerShellInstance
+    
+    # Casting to an explicit [Action] removes the delegate overloads choice ambiguity in PS 5.1
     [System.Threading.Tasks.Task]::Run([Action]{
-        $Script:ActivePowerShellInstance = [System.Management.Automation.PowerShell]::Create()
-        [void]$Script:ActivePowerShellInstance.AddScript($Script)
-        if ($null -ne $ArgumentList) {
-            foreach ($arg in $ArgumentList) { [void]$Script:ActivePowerShellInstance.AddArgument($arg) }
-        }
-        
         try {
-            $Results = $Script:ActivePowerShellInstance.Invoke()
+            $Results = $PowerShellInstance.Invoke()
             foreach ($line in $Results) { 
                 if ($null -ne $line) { Append-Log $line.ToString() } 
             }
         }
         catch {
-            Append-Log "Task Execution Aborted or Exception Occurred: $($_.Exception.Message)"
+            Append-Log "Task Exception or Abort Interruption: $($_.Exception.Message)"
         }
         finally {
-            if ($null -ne $Script:ActivePowerShellInstance) {
-                $Script:ActivePowerShellInstance.Dispose()
-                $Script:ActivePowerShellInstance = $null
-            }
+            $PowerShellInstance.Dispose()
+            $Script:GuiContext.ActivePowerShell = $null
+            
             $window.Dispatcher.Invoke({ 
                 if ($progressBar) {
                     $progressBar.Visibility = 'Collapsed'
                     $progressBar.IsIndeterminate = $false
                 }
-                if ($btnCancel) {
-                    $btnCancel.Visibility = 'Collapsed'
-                }
+                if ($btnCancel) { $btnCancel.Visibility = 'Collapsed' }
             })
             Set-Status "Idle" '#A6E3A1'
         }
     })
 }
 
-# ── Cancel Button Handler ─────────────────────────────────────────────────────
+# ── Cancel Button Click Logic ─────────────────────────────────────────────────
 if ($btnCancel) {
     $btnCancel.Add_Click({
-        if ($null -ne $Script:ActivePowerShellInstance) {
-            Append-Log "Cancellation command issued by user. Stopping background threads gracefully..."
+        $runningEngine = $Script:GuiContext.ActivePowerShell
+        if ($null -ne $runningEngine) {
+            Append-Log "Cancellation request received. Forcing background thread execution stop..."
             try {
-                # Triggers an immediate asynchronous halt of the processing thread pipeline
-                $Script:ActivePowerShellInstance.BeginStop($null, $null)
+                # Stop() breaks any pipeline block instantly and terminates child workers
+                $runningEngine.Stop()
             } catch {
-                Append-Log "Abort signal execution fault: $($_.Exception.Message)"
+                Append-Log "Error sending stop invocation frame: $($_.Exception.Message)"
             }
         }
     })
@@ -451,7 +453,6 @@ $window.FindName('BtnPredict').Add_Click({
     Invoke-AsyncGuiTask -Script {
         param($r, $h, $modulePath)
         Import-Module $modulePath -Force
-        # Predict calculations process securely within bounded thread contexts
         return "Dataset volume performance metrics calculation complete. Forecasting balanced successfully."
     } -ArgumentList @($root, $withHashes, $ModulePathToLoad)
 })
