@@ -277,6 +277,7 @@ function Update-DriveHashCache {
     $initCmd     = $null
     $checkCmd    = $null
     $insertCmd   = $null
+    $Pool        = $null
     $Workers     = New-Object System.Collections.Generic.List[object]
 
     try {
@@ -319,39 +320,46 @@ function Update-DriveHashCache {
             $SyncState = [Hashtable]::Synchronized(@{ IsProducerDone = $false })
             $MaxThreads = [Environment]::ProcessorCount
             
-            Write-Verbose ("[Asynchronous Engine] Initializing worker pool of $MaxThreads runspace threads...")
+            Write-Verbose ("[Asynchronous Engine] Initializing RunspacePool with $MaxThreads isolated kernels...")
+            $Pool = [RunspaceFactory]::CreateRunspacePool(1, $MaxThreads)
+            $Pool.Open()
+            
             for ($i = 0; $i -lt $MaxThreads; $i++) {
                 $PowerShell = [PowerShell]::Create()
+                $PowerShell.RunspacePool = $Pool
                 [void]$PowerShell.AddScript({
                     param($InputQueue, $OutputQueue, $State)
-                    while ($true) {
-                        $item = $null
-                        if ($InputQueue.Count -gt 0) {
-                            try { $item = $InputQueue.Dequeue() } catch { $item = $null }
-                        }
-                        if ($null -eq $item) {
-                            if ($State.IsProducerDone -and $InputQueue.Count -eq 0) {
-                                break
+                    try {
+                        $sha = [System.Security.Cryptography.SHA256]::Create()
+                        while ($true) {
+                            $item = $null
+                            if ($InputQueue.Count -gt 0) {
+                                try { $item = $InputQueue.Dequeue() } catch { $item = $null }
                             }
-                            [System.Threading.Thread]::Sleep(15)
-                            continue
-                        }
-                        try {
-                            if ([System.IO.File]::Exists($item.Path)) {
-                                $stream = [System.IO.File]::OpenRead($item.Path)
-                                $sha = [System.Security.Cryptography.SHA256CryptoServiceProvider]::new()
-                                $hashBytes = $sha.ComputeHash($stream)
-                                $stream.Close()
-                                $stream.Dispose()
-                                $sha.Dispose()
-                                
-                                $item.Hash = [System.BitConverter]::ToString($hashBytes) -replace '-'
-                                $OutputQueue.Enqueue($item)
+                            if ($null -eq $item) {
+                                if ($State.IsProducerDone -and $InputQueue.Count -eq 0) {
+                                    break
+                                }
+                                [System.Threading.Thread]::Sleep(15)
+                                continue
                             }
-                        } catch {
-                            $item.Hash = $null
+                            try {
+                                if ([System.IO.File]::Exists($item.Path)) {
+                                    $stream = [System.IO.File]::OpenRead($item.Path)
+                                    $hashBytes = $sha.ComputeHash($stream)
+                                    $stream.Close()
+                                    $stream.Dispose()
+                                    $item.Hash = [System.BitConverter]::ToString($hashBytes) -replace '-'
+                                } else {
+                                    $item.Hash = ""
+                                }
+                            } catch {
+                                $item.Hash = ""
+                            }
                             $OutputQueue.Enqueue($item)
                         }
+                    } finally {
+                        if ($null -ne $sha) { $sha.Dispose() }
                     }
                 }).AddArgument($SyncInput).AddArgument($SyncOutput).AddArgument($SyncState)
                 $Handle = $PowerShell.BeginInvoke()
@@ -441,7 +449,7 @@ function Update-DriveHashCache {
                             [System.Threading.Thread]::Sleep(30)
                             while ($SyncOutput.Count -gt 0) {
                                 $finished = $SyncOutput.Dequeue()
-                                if ($null -ne $finished.Hash) {
+                                if ($null -ne $finished.Hash -and $finished.Hash -ne "") {
                                     $pInsName.Value = $finished.Path
                                     $pInsLen.Value  = $finished.Length
                                     $pInsTime.Value = $finished.LastWriteTime
@@ -475,7 +483,7 @@ function Update-DriveHashCache {
                 if ($Asynchronous -and $SyncOutput.Count -gt 0) {
                     while ($SyncOutput.Count -gt 0) {
                         $finished = $SyncOutput.Dequeue()
-                        if ($null -ne $finished.Hash) {
+                        if ($null -ne $finished.Hash -and $finished.Hash -ne "") {
                             $pInsName.Value = $finished.Path
                             $pInsLen.Value  = $finished.Length
                             $pInsTime.Value = $finished.LastWriteTime
@@ -550,7 +558,7 @@ function Update-DriveHashCache {
                                     [System.Threading.Thread]::Sleep(30)
                                     while ($SyncOutput.Count -gt 0) {
                                         $finished = $SyncOutput.Dequeue()
-                                        if ($null -ne $finished.Hash) {
+                                        if ($null -ne $finished.Hash -and $finished.Hash -ne "") {
                                             $pInsName.Value = $finished.Path
                                             $pInsLen.Value  = $finished.Length
                                             $pInsTime.Value = $finished.LastWriteTime
@@ -584,7 +592,7 @@ function Update-DriveHashCache {
                         if ($Asynchronous -and $SyncOutput.Count -gt 0) {
                             while ($SyncOutput.Count -gt 0) {
                                 $finished = $SyncOutput.Dequeue()
-                                if ($null -ne $finished.Hash) {
+                                if ($null -ne $finished.Hash -and $finished.Hash -ne "") {
                                     $pInsName.Value = $finished.Path
                                     $pInsLen.Value  = $finished.Length
                                     $pInsTime.Value = $finished.LastWriteTime
@@ -607,7 +615,7 @@ function Update-DriveHashCache {
             while ($true) {
                 while ($SyncOutput.Count -gt 0) {
                     $finished = $SyncOutput.Dequeue()
-                    if ($null -ne $finished.Hash) {
+                    if ($null -ne $finished.Hash -and $finished.Hash -ne "") {
                         $pInsName.Value = $finished.Path
                         $pInsLen.Value  = $finished.Length
                         $pInsTime.Value = $finished.LastWriteTime
@@ -655,7 +663,12 @@ function Update-DriveHashCache {
         
         foreach ($w in $Workers) {
             try { $w.PowerShell.Dispose() } catch { 
-                # Safe loop recovery release
+                # Safe loop recovery release guard
+            }
+        }
+        if ($null -ne $Pool) {
+            try { $Pool.Close(); $Pool.Dispose() } catch { 
+                # Release RunspacePool hooks explicitly
             }
         }
         
@@ -719,6 +732,7 @@ function Invoke-DriveAuditFast {
     $totalProcessed = 0
     $cacheHits = 0
     $cacheMisses = 0
+    $Pool = $null
     $Workers = New-Object System.Collections.Generic.List[object]
 
     try {
@@ -730,8 +744,12 @@ function Invoke-DriveAuditFast {
             $SyncState = [Hashtable]::Synchronized(@{ IsProducerDone = $false })
             $MaxThreads = [Environment]::ProcessorCount
             
+            $Pool = [RunspaceFactory]::CreateRunspacePool(1, $MaxThreads)
+            $Pool.Open()
+            
             for ($i = 0; $i -lt $MaxThreads; $i++) {
                 $PowerShell = [PowerShell]::Create()
+                $PowerShell.RunspacePool = $Pool
                 [void]$PowerShell.AddScript({
                     param($InputQueue, $OutputQueue, $State)
                     while ($true) {
@@ -1020,6 +1038,9 @@ function Invoke-DriveAuditFast {
             try { $w.PowerShell.Dispose() } catch { 
                 # Safe recovery release guard
             }
+        }
+        if ($null -ne $Pool) {
+            try { $Pool.Close(); $Pool.Dispose() } catch { }
         }
         
         [System.GC]::Collect()
