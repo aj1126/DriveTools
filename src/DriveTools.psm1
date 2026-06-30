@@ -372,7 +372,8 @@ function Update-DriveHashCache {
 
                 if (-not $cacheHit) {
                     try {
-                        $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256).Hash
+                        # -ErrorAction SilentlyContinue permanently suppresses raw NTFS kernel-protected read alerts
+                        $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
                     } catch {
                         # PSAvoidEmptyCatchBlock explanation: Suppress read locked operational nodes safely
                         $hash = $null
@@ -438,7 +439,7 @@ function Update-DriveHashCache {
 
                         if (-not $cacheHit) {
                             try {
-                                $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256).Hash
+                                $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
                             } catch {
                                 $hash = $null
                             }
@@ -554,7 +555,7 @@ function Invoke-DriveAuditFast {
                 $hash = $null
                 if ($IncludeHashes) {
                     try {
-                        $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256).Hash
+                        $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
                     } catch {
                         # PSAvoidEmptyCatchBlock explanation: Skip logging transient file reads cleanly
                     }
@@ -595,7 +596,7 @@ function Invoke-DriveAuditFast {
                         $hash = $null
                         if ($IncludeHashes) {
                             try { 
-                                $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256).Hash 
+                                $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash 
                             } catch { 
                                 # PSAvoidEmptyCatchBlock explanation: Skip access flags
                             }
