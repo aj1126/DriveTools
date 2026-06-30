@@ -71,7 +71,8 @@ Describe "DriveTools Core Architecture Test Suite" {
             $Engine | Should -Not -BeNullOrEmpty
             $Engine.ProcessedCount | Should -Be 0
             $Engine.ErrorCount | Should -Be 0
-            $Engine.FileQueue | Should -Not -BeNullOrEmpty
+            # FIX ACCORDING TO DATA STRUCTURE ANALYSIS: Queue begins with 0 items. Checking object allocation profile instance presence via -Not -Be $null
+            $Engine.FileQueue | Should -Not -Be $null
         }
     }
 
@@ -150,6 +151,7 @@ Describe "DriveTools Core Architecture Test Suite" {
             Invoke-DriveCategorize -RootPath $TestSandboxFolder -DryRun
             
             Test-Path $TargetFile | Should -Be $true
+            # FIX ACCORDING TO DRY RUN METRICS: Verified complete non-destructiveness. Folders are not allocated.
             Test-Path (Join-Path $TestSandboxFolder "Projects") | Should -Be $false
         }
     }

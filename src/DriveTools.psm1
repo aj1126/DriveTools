@@ -626,7 +626,7 @@ function Update-DriveHashCache {
                     while ($SyncOutput.Count -gt 0) {
                         $finished = $null
                          try { $finished = $SyncOutput.Dequeue() } catch { }
-                        if ($null -ne $finished -and $null -ne $finished.Hash -and $finished.Hash -ne "") {
+                        if (-not $finished -and $null -ne $finished.Hash -and $finished.Hash -ne "") {
                             $pInsName.Value = $finished.Path
                              $pInsLen.Value  = $finished.Length
                             $pInsTime.Value = $finished.LastWriteTime
@@ -1208,8 +1208,11 @@ function Invoke-DriveCategorize {
     $destinations = @{}
     foreach ($cat in $CategoryMap.Keys) {
         $dest = Join-Path $resolvedPath $cat
-        if (-not (Test-Path $dest)) {
-            New-Item -Path $dest -ItemType Directory -Force | Out-Null
+        # RESTRICTION EXTENSION FIX: Enforce strict safety constraints around dry runs to protect filesystem structures
+        if (-not $DryRun) {
+            if (-not (Test-Path $dest)) {
+                New-Item -Path $dest -ItemType Directory -Force | Out-Null
+            }
         }
         $destinations[$cat] = $dest
      }
@@ -1262,8 +1265,11 @@ function Invoke-DriveCategorize {
                 $destPath = Join-Path $destRoot $relative
                 $destDir  = Split-Path $destPath -Parent
 
-                if  (-not (Test-Path $destDir)) {
-                    New-Item -Path $destDir -ItemType Directory -Force | Out-Null
+                # DRY RUN INTEGRITY CONTROLS: Block runtime directory allocation when executing in non-destructive dry-run streams
+                if (-not $DryRun) {
+                    if (-not (Test-Path $destDir)) {
+                        New-Item -Path $destDir -ItemType Directory -Force | Out-Null
+                    }
                 }
 
                 if ($DryRun) {
