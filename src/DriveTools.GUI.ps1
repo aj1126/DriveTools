@@ -38,6 +38,7 @@ if (-not (Get-Module DriveTools)) {
 # Thread-Safe Shared Context State Capsule to bridge UI and Task threads
 $Script:GuiContext = [hashtable]::Synchronized(@{
     ActivePowerShell = $null
+    OutputCollection = $null
 })
 
 # ── XAML layout ──────────────────────────────────────────────────────────────
@@ -316,6 +317,7 @@ function Invoke-AsyncGuiTask {
     })
 
     $Script:GuiContext.ActivePowerShell = $PowerShellInstance
+    $Script:GuiContext.OutputCollection = $outputCollection
     
     try {
         [void]$PowerShellInstance.BeginInvoke($outputCollection)
@@ -323,6 +325,7 @@ function Invoke-AsyncGuiTask {
     catch {
         Append-Log "Failed to initialize async runspace pipeline: $($_.Exception.Message)"
         $Script:GuiContext.ActivePowerShell = $null
+        $Script:GuiContext.OutputCollection = $null
         Set-UiButtonsState -Enabled $true
         $window.Dispatcher.Invoke({
             if ($progressBar) { $progressBar.Visibility = 'Collapsed' }
@@ -543,7 +546,12 @@ $timer.Add_Tick({
             }
 
             try { $runningEngine.Dispose() } catch {}
+            if ($Script:GuiContext.OutputCollection) {
+                try { $Script:GuiContext.OutputCollection.Dispose() } catch {}
+            }
+            
             $Script:GuiContext.ActivePowerShell = $null
+            $Script:GuiContext.OutputCollection = $null
             
             # Re-enable action controls now that the background process channel is empty
             Set-UiButtonsState -Enabled $true
