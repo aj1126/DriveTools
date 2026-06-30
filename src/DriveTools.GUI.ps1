@@ -74,6 +74,10 @@ $Script:GuiContext = [hashtable]::Synchronized(@{
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter Property="Background" Value="#45475A"/>
                             </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#1A1A26"/>
+                                <Setter Property="Foreground" Value="#585B70"/>
+                            </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter Property="Background" Value="#585B70"/>
                             </Trigger>
@@ -262,12 +266,32 @@ function Set-Status {
     })
 }
 
-# Native Thread-Safe Async Pipeline Handler (Guarantees Flawless Argument Mapping)
+# Enforce button state throttling to prevent parallel process overlapping
+function Set-UiButtonsState {
+    param([bool]$Enabled)
+    $window.Dispatcher.Invoke({
+        $actionButtons = @('BtnAudit', 'BtnHashCache', 'BtnCategorize', 'BtnDupes', 'BtnCleanup', 'BtnMap', 'BtnPredict', 'BtnSchedule')
+        foreach ($btnName in $actionButtons) {
+            $btn = $window.FindName($btnName)
+            if ($btn) { $btn.IsEnabled = $Enabled }
+        }
+    })
+}
+
+# Native Thread-Safe Async Pipeline Handler with Complete Mutual Exclusion Toggles
 function Invoke-AsyncGuiTask {
     param(
         [ScriptBlock]$Script,
-        [object[]]$ArgumentList
+        [object[]]$ArgumentList,
+        [string]$RunningStatus
     )
+    
+    # Strict Execution Protection Block
+    if ($null -ne $Script:GuiContext.ActivePowerShell) {
+        Append-Log "Operation Aborted: A background pipeline task is already processing entries. Please wait or cancel."
+        return
+    }
+
     $window.Dispatcher.Invoke({ 
         if ($progressBar) {
             $progressBar.Visibility = 'Visible'
@@ -276,13 +300,13 @@ function Invoke-AsyncGuiTask {
         if ($btnCancel) { $btnCancel.Visibility = 'Visible' }
     })
     
-    # Initialize the runner context on the UI thread to freeze references securely
-    $PowerShellInstance = [System.Management.Automation.PowerShell]::Create()
+    # Enforce mutual exclusion by freezing buttons and setting explicit status labels
+    Set-UiButtonsState -Enabled $false
+    if ($RunningStatus) { Set-Status $RunningStatus '#F9E2AF' }
     
-    # Utilizing Invoke-Command dynamically bypasses parameter binding flaws of AddScript()
+    $PowerShellInstance = [System.Management.Automation.PowerShell]::Create()
     [void]$PowerShellInstance.AddCommand("Invoke-Command").AddParameter("ScriptBlock", $Script).AddParameter("ArgumentList", $ArgumentList)
     
-    # Establish a real-time thread-safe output stream callback array
     $outputCollection = New-Object System.Management.Automation.PSDataCollection[PSObject]
     $outputCollection.Add_DataAdding({
         param($sender, $eventArgs)
@@ -291,16 +315,15 @@ function Invoke-AsyncGuiTask {
         }
     })
 
-    # Cache execution pointer inside our synchronized global tracker wrapper
     $Script:GuiContext.ActivePowerShell = $PowerShellInstance
     
-    # Fire off background work execution decoupled from rendering threads
     try {
         [void]$PowerShellInstance.BeginInvoke($outputCollection)
     }
     catch {
         Append-Log "Failed to initialize async runspace pipeline: $($_.Exception.Message)"
         $Script:GuiContext.ActivePowerShell = $null
+        Set-UiButtonsState -Enabled $true
         $window.Dispatcher.Invoke({
             if ($progressBar) { $progressBar.Visibility = 'Collapsed' }
             if ($btnCancel) { $btnCancel.Visibility = 'Collapsed' }
@@ -316,7 +339,6 @@ if ($btnCancel) {
         if ($null -ne $runningEngine) {
             Append-Log "Cancellation command issued. Stopping background processing workloads..."
             try {
-                # Stop() terminates all worker child tasks and forces state to 'Stopped' immediately
                 $runningEngine.Stop()
             } catch {
                 Append-Log "Error sending execution stop signal: $($_.Exception.Message)"
@@ -337,29 +359,23 @@ $window.FindName('BtnBrowse').Add_Click({
 $window.FindName('BtnAudit').Add_Click({
     $root       = $txtRoot.Text
     $withHashes = $chkHashes.IsChecked
-    Set-Status "Running audit…" '#F9E2AF'
-    Append-Log "Starting high-performance file ingestion audit of '$root' (Asynchronous Hashing=$withHashes)"
-    
     Invoke-AsyncGuiTask -Script {
         param($r, $h, $modulePath)
         Import-Module $modulePath -Force
         $csv = Invoke-DriveAuditFast -RootPath $r -IncludeHashes:$h -Asynchronous:$h
         return "CSV saved to: $csv"
-    } -ArgumentList @($root, $withHashes, $ModulePathToLoad)
+    } -ArgumentList @($root, $withHashes, $ModulePathToLoad) -RunningStatus "Auditing Drive Tree..."
 })
 
 # ── Hash Cache ────────────────────────────────────────────────────────────────
 $window.FindName('BtnHashCache').Add_Click({
     $root = $txtRoot.Text
-    Set-Status "Updating hash cache…" '#F9E2AF'
-    Append-Log "Updating transactional SQLite hash cache index for '$root'..."
-    
     Invoke-AsyncGuiTask -Script {
         param($r, $modulePath)
         Import-Module $modulePath -Force
         $db = Update-DriveHashCache -RootPath $r -Asynchronous
         return "Hash cache update complete: $db"
-    } -ArgumentList @($root, $ModulePathToLoad)
+    } -ArgumentList @($root, $ModulePathToLoad) -RunningStatus "Updating File Hash Index Cache..."
 })
 
 # ── Categorize ────────────────────────────────────────────────────────────────
@@ -367,15 +383,12 @@ $window.FindName('BtnCategorize').Add_Click({
     $root    = $txtRoot.Text
     $dryRun  = $chkDryRun.IsChecked
     $mode    = if ($dryRun) { 'DryRun' } else { 'LIVE' }
-    Set-Status "Categorizing… ($mode)" '#F9E2AF'
-    Append-Log "Categorize: root='$root' DryRun=$dryRun"
-    
     Invoke-AsyncGuiTask -Script {
         param($r, $d, $modulePath)
         Import-Module $modulePath -Force
         Invoke-DriveCategorize -RootPath $r -DryRun:$d
         return "Categorization complete."
-    } -ArgumentList @($root, $dryRun, $ModulePathToLoad)
+    } -ArgumentList @($root, $dryRun, $ModulePathToLoad) -RunningStatus "Categorizing File Formats ($mode)..."
 })
 
 # ── Dedup ─────────────────────────────────────────────────────────────────────
@@ -388,15 +401,12 @@ $window.FindName('BtnDupes').Add_Click({
             "Confirm Dedup", "YesNo", "Warning")
         if ($confirm -ne 'Yes') { Append-Log "Dedup cancelled."; return }
     }
-    Set-Status "Resolving duplicates…" '#F9E2AF'
-    Append-Log "Dedup: root='$root' DryRun=$dryRun"
-    
     Invoke-AsyncGuiTask -Script {
         param($r, $d, $modulePath)
         Import-Module $modulePath -Force
         Resolve-DriveDuplicates -RootPath $r -DryRun:$d
         return "Dedup complete."
-    } -ArgumentList @($root, $dryRun, $ModulePathToLoad)
+    } -ArgumentList @($root, $dryRun, $ModulePathToLoad) -RunningStatus "Resolving Redundant Duplicates..."
 })
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
@@ -405,29 +415,23 @@ $window.FindName('BtnCleanup').Add_Click({
     $emptyDirs = $chkEmptyDirs.IsChecked
     $compress  = $chkCompress.IsChecked
     $dupeRpt   = $chkDupeRpt.IsChecked
-    Set-Status "Running cleanup…" '#F9E2AF'
-    Append-Log "Cleanup: EmptyDirs=$emptyDirs Compress=$compress DupeReport=$dupeRpt"
-    
     Invoke-AsyncGuiTask -Script {
         param($r, $e, $c, $d, $modulePath)
         Import-Module $modulePath -Force
         Invoke-DriveCleanup -RootPath $r -RemoveEmptyDirectories:$e -CompressArchives:$c -ReportDuplicates:$d
         return "Cleanup complete."
-    } -ArgumentList @($root, $emptyDirs, $compress, $dupeRpt, $ModulePathToLoad)
+    } -ArgumentList @($root, $emptyDirs, $compress, $dupeRpt, $ModulePathToLoad) -RunningStatus "Running Storage Maintenance Cleanups..."
 })
 
 # ── Visual Map ────────────────────────────────────────────────────────────────
 $window.FindName('BtnMap').Add_Click({
     $root = $txtRoot.Text
-    Set-Status "Generating tree map…" '#F9E2AF'
-    Append-Log "Building visual map for '$root'"
-    
     Invoke-AsyncGuiTask -Script {
         param($r, $modulePath)
         Import-Module $modulePath -Force
         $out = Show-DriveVisualMap -RootPath $r -MaxDepth 4
         return "Map saved — $($out.Count) lines"
-    } -ArgumentList @($root, $ModulePathToLoad)
+    } -ArgumentList @($root, $ModulePathToLoad) -RunningStatus "Generating Tree Layout Mapping..."
 })
 
 # ── Schedule ──────────────────────────────────────────────────────────────────
@@ -443,9 +447,6 @@ $window.FindName('BtnSchedule').Add_Click({
 $window.FindName('BtnPredict').Add_Click({
     $root       = $txtRoot.Text
     $withHashes = $chkHashes.IsChecked
-    Set-Status "Predicting scan duration…" '#F9E2AF'
-    Append-Log "Starting scan duration prediction forecasting for '$root' (Hashes=$withHashes)"
-    
     Invoke-AsyncGuiTask -Script {
         param($r, $h, $modulePath)
         Import-Module $modulePath -Force
@@ -456,24 +457,21 @@ $window.FindName('BtnPredict').Add_Click({
         $totalBytes = 0
         
         try {
-            # Low overhead .NET lazy enumeration feeds live status reports back to text boxes
             $files = [System.IO.Directory]::EnumerateFiles($r, "*", [System.IO.SearchOption]::AllDirectories)
             foreach ($file in $files) {
                 $fileCount++
                 try { $totalBytes += [System.IO.FileInfo]::new($file).Length } catch {}
-                
                 if ($fileCount % 4000 -eq 0) {
-                    Write-Output "Discovered $fileCount objects inside root node storage workspace tree..."
+                    Write-Output "Analyzed $fileCount directory entry endpoints..."
                 }
             }
         } catch {
-            return "Forecasting execution block interrupted: $($_.Exception.Message)"
+            return "Forecasting block aborted: $($_.Exception.Message)"
         }
         
         $totalGB = [math]::Round($totalBytes / 1GB, 2)
         $driveRoot = [System.IO.Path]::GetPathRoot($r)
         
-        # Calculate media type performance speeds based on MFT storage benchmarks
         $isHdd = $true
         try {
             if ([System.Management.Automation.PSTypeName]'DriveTools.Core.StorageProfiler') {
@@ -506,7 +504,7 @@ $window.FindName('BtnPredict').Add_Click({
  Projected Performance Duration Estimate: $formattedTime
 ======================================================================
 "@
-    } -ArgumentList @($root, $withHashes, $ModulePathToLoad)
+    } -ArgumentList @($root, $withHashes, $ModulePathToLoad) -RunningStatus "Predicting Scan Duration..."
 })
 
 # ── Clear log ─────────────────────────────────────────────────────────────────
@@ -516,15 +514,18 @@ $window.FindName('BtnClearLog').Add_Click({
 
 # ── Status polling timer & Lifecycle Observer loop ───────────────────────────
 $timer = [System.Windows.Threading.DispatcherTimer]::new()
-$timer.Interval = [TimeSpan]::FromSeconds(1) # Increased cycle rate to 1 second for snappy button updates
+$timer.Interval = [TimeSpan]::FromSeconds(1)
 $timer.Add_Tick({
-    # 1. Update status text box from engine module
+    # 1. Update status text box from engine module if it registers an operation
     $s = Get-DriveToolsStatus
     if ($s.Operation) {
         Set-Status "$($s.Operation) — $($s.Details)" '#F9E2AF'
     } else {
-        if ($txtStatus.Text -notmatch "Running|Updating|Categorizing|Resolving|Predicting") {
-            Set-Status "Idle" '#A6E3A1'
+        # Only reset to Idle if NO background script block is actively processing tracks
+        if ($null -eq $Script:GuiContext.ActivePowerShell) {
+            if ($txtStatus.Text -notmatch "Idle") {
+                Set-Status "Idle" '#A6E3A1'
+            }
         }
     }
 
@@ -534,7 +535,6 @@ $timer.Add_Tick({
         $state = $runningEngine.InvocationStateInfo.State
         if ($state -eq 'Completed' -or $state -eq 'Stopped' -or $state -eq 'Failed') {
             
-            # Flush thread error exceptions directly out to the text panel
             if ($runningEngine.Streams.Error.Count -gt 0) {
                 foreach ($err in $runningEngine.Streams.Error) { Append-Log "Pipeline Exception: $err" }
             }
@@ -545,7 +545,9 @@ $timer.Add_Tick({
             try { $runningEngine.Dispose() } catch {}
             $Script:GuiContext.ActivePowerShell = $null
             
-            # Safely close down loading frames and reset interface targets
+            # Re-enable action controls now that the background process channel is empty
+            Set-UiButtonsState -Enabled $true
+            
             $window.Dispatcher.Invoke({ 
                 if ($progressBar) {
                     $progressBar.Visibility = 'Collapsed'
