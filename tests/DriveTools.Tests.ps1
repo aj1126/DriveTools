@@ -56,23 +56,23 @@ Describe "DriveTools Core Architecture Test Suite" {
         
         It "Should have compiled and registered the DriveTools.Core.AuditEngine type" {
             $Type = [System.Management.Automation.PSTypeName]'DriveTools.Core.AuditEngine'
-            $Type.Type | Should -Not -BeNullOrEmpty
+            $Type.Type | Should Not BeNullOrEmpty
         }
 
         It "Should have compiled and registered the DriveTools.Core.StorageProfiler type" {
             $Type = [System.Management.Automation.PSTypeName]'DriveTools.Core.StorageProfiler'
-            $Type.Type | Should -Not -BeNullOrEmpty
+            $Type.Type | Should Not BeNullOrEmpty
         }
 
         It "Should successfully instantiate the AuditEngine class with safe bounded structures" {
             $MockLog = Join-Path $Script:TestLogDir "engine_init_test.csv"
             $Engine = [DriveTools.Core.AuditEngine]::new(5000, $MockLog)
             
-            $Engine | Should -Not -BeNullOrEmpty
-            $Engine.ProcessedCount | Should -Be 0
-            $Engine.ErrorCount | Should -Be 0
+            $Engine | Should Not BeNullOrEmpty
+            $Engine.ProcessedCount | Should Be 0
+            $Engine.ErrorCount | Should Be 0
             # PROPERTY BINDING VERIFICATION: Checked against the exposed auto-property context snapshot allocation
-            $Engine.FileQueue | Should -Not -Be $null
+            ($null -ne $Engine.FileQueue) | Should Be $true
         }
     }
 
@@ -87,9 +87,9 @@ Describe "DriveTools Core Architecture Test Suite" {
             $FileDate = Get-Date -Format 'yyyy-MM-dd'
             $ExpectedLogFile = Join-Path $ActualLogRoot "DriveTools_${FileDate}.log"
             
-            Test-Path $ExpectedLogFile | Should -Be $true
+            Test-Path $ExpectedLogFile | Should Be $true
             $Content = Get-Content -Path $ExpectedLogFile -Raw
-            $Content | Should -Match "\[Info\] $TestMessage"
+            $Content | Should Match "\[Info\] $TestMessage"
         }
 
         It "Should atomically serialize process task profiles to disk as a JSON string" {
@@ -98,11 +98,11 @@ Describe "DriveTools Core Architecture Test Suite" {
             
             $ActualLogRoot = & (Get-Module DriveTools) { $Script:DriveTools_DefaultLogRoot }
             $ExpectedStatusFile = Join-Path $ActualLogRoot "DriveTools_Status.json"
-            Test-Path $ExpectedStatusFile | Should -Be $true
+            Test-Path $ExpectedStatusFile | Should Be $true
             
             $StatusObject = Get-DriveToolsStatus
-            $StatusObject.Operation | Should -Be "UnitTesting"
-            $StatusObject.Details | Should -Be "Verifying serialization parameters"
+            $StatusObject.Operation | Should Be "UnitTesting"
+            $StatusObject.Details | Should Be "Verifying serialization parameters"
         }
 
         It "Should completely erase the status json configuration node upon clear invocation" {
@@ -111,10 +111,10 @@ Describe "DriveTools Core Architecture Test Suite" {
             
             $ActualLogRoot = & (Get-Module DriveTools) { $Script:DriveTools_DefaultLogRoot }
             $ExpectedStatusFile = Join-Path $ActualLogRoot "DriveTools_Status.json"
-            Test-Path $ExpectedStatusFile | Should -Be $false
+            Test-Path $ExpectedStatusFile | Should Be $false
             
             $StatusObject = Get-DriveToolsStatus
-            $StatusObject.Operation | Should -BeNullOrEmpty
+            $StatusObject.Operation | Should BeNullOrEmpty
         }
     }
 
@@ -125,20 +125,20 @@ Describe "DriveTools Core Architecture Test Suite" {
             $MockOutputCsv = Join-Path $Script:TestLogDir "mock_audit_out.csv"
             $Result = Invoke-DriveAuditFast -RootPath "C:\" -OutputCsvPath $MockOutputCsv -UseMock
             
-            $Result | Should -Be $MockOutputCsv
-            Test-Path $MockOutputCsv | Should -Be $true
+            $Result | Should Be $MockOutputCsv
+            Test-Path $MockOutputCsv | Should Be $true
             $Header = Get-Content -Path $MockOutputCsv -First 1
-            $Header | Should -Be "FullName,Length,Extension,LastWriteTime,Hash"
+            $Header | Should Be "FullName,Length,Extension,LastWriteTime,Hash"
         }
 
         It "Should route Update-DriveHashCache safely under mock conditions" {
             $MockDb = Join-Path $Script:TestLogDir "mock_cache.db"
             $Result = Update-DriveHashCache -RootPath "C:\" -CachePath $MockDb -UseMock
             
-            $Result | Should -Be $MockDb
-            Test-Path $MockDb | Should -Be $true
+            $Result | Should Be $MockDb
+            Test-Path $MockDb | Should Be $true
             $JsonContent = Get-Content -Path $MockDb -Raw | ConvertFrom-Json
-            $JsonContent."MockFile.txt".Hash | Should -Be "MOCKHASH"
+            $JsonContent."MockFile.txt".Hash | Should Be "MOCKHASH"
         }
 
         It "Should preserve drive topology blocks intact when running Categorize in DryRun mode" {
@@ -150,8 +150,8 @@ Describe "DriveTools Core Architecture Test Suite" {
             
             Invoke-DriveCategorize -RootPath $TestSandboxFolder -DryRun
             
-            Test-Path $TargetFile | Should -Be $true
-            Test-Path (Join-Path $TestSandboxFolder "Projects") | Should -Be $false
+            Test-Path $TargetFile | Should Be $true
+            Test-Path (Join-Path $TestSandboxFolder "Projects") | Should Be $false
         }
     }
 
@@ -160,7 +160,7 @@ Describe "DriveTools Core Architecture Test Suite" {
         
         It "Should gracefully handle UnauthorizedAccessException or deep folder access errors" {
             # Standardized Pester v5 script block format constraints
-            { Show-DriveVisualMap -RootPath "C:\" -MaxDepth 1 -OutputPath (Join-Path $Script:TestLogDir "vmap.txt") } | Should -Not -Throw
+            { Show-DriveVisualMap -RootPath "C:\" -MaxDepth 1 -OutputPath (Join-Path $Script:TestLogDir "vmap.txt") } | Should Not Throw
         }
 
         It "Should break cleanly with a descriptive log entry if an un-hydrated cache database is queried for dedup" {
@@ -182,7 +182,7 @@ Describe "DriveTools Core Architecture Test Suite" {
             $FinalLineCount = if (Test-Path $CurrentLogFile) { (Get-Content $CurrentLogFile).Count } else { 0 }
             $NewLines = if ($FinalLineCount -gt $InitialLineCount) { Get-Content $CurrentLogFile | Select-Object -Last ($FinalLineCount - $InitialLineCount) } else { @() }
             
-            $NewLines -join " " | Should -Match "Cache index database missing"
+            $NewLines -join " " | Should Match "Cache index database missing"
         }
     }
 }

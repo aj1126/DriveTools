@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     DriveTools — Complete drive auditing, categorization, refinement, and maintenance toolkit.
@@ -62,9 +62,9 @@ namespace DriveTools.Core {
             _activeFile = string.Empty;
         }
 
-        public int ProcessedCount => _processedCount;
-        public int ErrorCount => _errorCount;
-        public string ActiveFile => _activeFile;
+        public int ProcessedCount { get { return _processedCount; } }
+        public int ErrorCount { get { return _errorCount; } }
+        public string ActiveFile { get { return _activeFile; } }
 
         public void StartConsumerWorker() {
             using (SHA256 hasher = SHA256.Create()) {
