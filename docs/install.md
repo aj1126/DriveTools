@@ -2,10 +2,12 @@
 
 ## Manual Install
 
-Copy the `src/` folder to:
+Copy the `DriveTools` folder containing all files and subdirectories to:
 
-$env:USERPROFILE\Documents\WindowsPowerShell\Modules\DriveTools\2.0\
+`$env:USERPROFILE\Documents\PowerShell\Modules\DriveTools\`
 
 ## PowerShell Gallery (future)
 
+```powershell
 Install-Module DriveTools
+```

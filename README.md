@@ -37,13 +37,21 @@
 
 ```
 DriveTools/
-├── 2.0/
-│   ├── DriveTools.psm1        # Module implementation
-│   ├── DriveTools.psd1        # Module manifest
+├── DriveTools.psd1        # Module manifest
+├── DriveTools.psm1        # Module implementation
+├── DriveTools.GUI.ps1     # WPF graphical launcher
+├── public/                # Public functions (autoloaded)
+│   └── Start-DTAuditGui.ps1
+├── src/
+│   └── UI/
+│       └── MainWindow.xaml # WPF window layout
+├── lib/                   # SQLite database dependencies
+│   ├── System.Data.SQLite.dll
+│   └── x64/
+│       └── SQLite.Interop.dll
 ├── tests/
 │   └── DriveTools.Tests.ps1   # Pester test suite
 ├── tools/
-│   ├── DriveTools.GUI.ps1     # WPF graphical launcher
 │   └── Invoke-DriveBenchmark.ps1  # Performance benchmark script
 ├── profile-snippet.ps1         # PowerShell profile snippet
 └── README.md
@@ -56,9 +64,10 @@ DriveTools/
 ### Option A — Manual (recommended for personal use)
 
 ```powershell
-$dest = "$env:USERPROFILE\Documents\WindowsPowerShell\Modules\DriveTools\2.0"
+$dest = "$env:USERPROFILE\Documents\PowerShell\Modules\DriveTools"
 New-Item -Path $dest -ItemType Directory -Force
-Copy-Item DriveTools.psm1, DriveTools.psd1 -Destination $dest
+Copy-Item DriveTools.psd1, DriveTools.psm1, DriveTools.GUI.ps1 -Destination $dest
+Copy-Item public, src, lib -Destination $dest -Recurse -Force
 ```
 
 ### Option B — Clone and install

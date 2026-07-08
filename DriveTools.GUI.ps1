@@ -19,7 +19,7 @@ $ModulePathToLoad = Join-Path $ScriptDir "DriveTools.psd1"
 
 # ── Import module if not already loaded ──────────────────────────────────────
 if (-not (Get-Module DriveTools)) {
-    $modPath = "$env:USERPROFILE\Documents\WindowsPowerShell\Modules\DriveTools\2.0\DriveTools.psd1"
+    $modPath = "$env:USERPROFILE\Documents\PowerShell\Modules\DriveTools\DriveTools.psd1"
     if (Test-Path $ModulePathToLoad) {
         Import-Module $ModulePathToLoad -Force
     } elseif (Test-Path $modPath) {

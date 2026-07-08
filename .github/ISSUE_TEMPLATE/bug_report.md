@@ -1,6 +1,6 @@
 ---
 name: Bug Report
-about: Report a problem with MyBookTools
+about: Report a problem with DriveTools
 labels: bug
 ---
 
@@ -21,4 +21,4 @@ Paste relevant logs or screenshots.
 ## Environment
 - PowerShell version:
 - OS version:
-- MyBookTools version:
+- DriveTools version:

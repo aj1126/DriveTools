@@ -2,7 +2,7 @@
 
 ## 2.0.0 — 2026-06-15
 ### Added
-- Full MyBookTools v2 module
+- Full DriveTools v2 module
 - Auto-loaded CategoryMap with disable toggle
 - Fast audit subsystem
 - Hash caching subsystem

@@ -7,7 +7,7 @@
 if (Get-Module -ListAvailable -Name DriveTools) {
     Import-Module DriveTools -ErrorAction SilentlyContinue
 } else {
-    Write-Warning "DriveTools not found. Install it to $env:USERPROFILE\Documents\WindowsPowerShell\Modules\DriveTools\2.0\"
+    Write-Warning "DriveTools not found. Install it to $env:USERPROFILE\Documents\PowerShell\Modules\DriveTools\"
 }
 
 # ── Convenience aliases ───────────────────────────────────────────────────────

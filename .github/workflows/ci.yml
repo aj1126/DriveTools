@@ -26,7 +26,7 @@ jobs:
         $config.Run.Path = 'tests'
         $config.Output.Verbosity = 'Detailed'
         $config.CodeCoverage.Enabled = $true
-        $config.CodeCoverage.Path = 'src/DriveTools.psm1'
+        $config.CodeCoverage.Path = 'DriveTools.psm1'
         $config.Run.PassThru = $true
         $result = Invoke-Pester -Configuration $config
         $coverage = $result.CodeCoverage
