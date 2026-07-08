@@ -17,6 +17,7 @@
   - Negation: use `Should Not BeNullOrEmpty`, `Should Not Throw`, `Should Not Be $null`
   - Boolean: use `Should Be $true` or `Should Be $false`
   - Comparison: use `Should BeGreaterThan 0`
+  - Collection Null Checks: Avoid piping empty collections (like `BlockingCollection` or arrays) directly to `Should Not Be $null`. PowerShell unpacks the empty collection to nothing, causing the check to fail. Instead, check using a parenthesized boolean assertion: `($null -ne $Engine.FileQueue) | Should Be $true`.
 
 ## 4. Re-Saving UTF-8 with BOM Safely
 - **Avoiding Encoding Corruption**: When converting/saving a file to UTF-8 with BOM via PowerShell, ensure you read the file using `-Encoding UTF8` before writing it back. Reading it as ANSI will corrupt existing Unicode glyphs:
@@ -52,3 +53,14 @@
 ## 8. Artifact and Workspace File Operations
 - **Artifact Directory Bounds**: Always write user-facing reports, plan documents, and walk-throughs in the designated conversation brain directory `C:\Users\ajjuk\.gemini\antigravity\brain\<conversation-id>/` and provide `ArtifactMetadata`.
 - **Workspace Files**: Never provide `ArtifactMetadata` when creating or modifying files inside the user's workspace directory (e.g. source files, `.vscode/settings.json`, `.cursorrules`).
+
+## 9. C# Inline Compilation Compatibility (PowerShell 5.1+)
+- **C# 5 Syntax Limits**: When defining inline C# class definitions via `Add-Type` in module files, restrict the code syntax to C# 5 or lower. Windows PowerShell 5.1 compiles code using the .NET 4.0 C# compiler, which does not support C# 6+ features (e.g., expression-bodied properties `=>`, string interpolation `$""`, null-conditional operator `?.`).
+- **Property Getters**: Use standard explicit getters instead of `=>`:
+  ```csharp
+  // Correct (C# 5):
+  public int ProcessedCount { get { return _processedCount; } }
+
+  // Incorrect (C# 6):
+  public int ProcessedCount => _processedCount;
+  ```
