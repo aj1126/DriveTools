@@ -12,12 +12,27 @@
 ## 2. Cross-Process State Management in GUI Background Jobs
 - **File-Based State Communication**: When running long-running module functions in background threads or processes (e.g., via `Start-Job` in a WPF GUI launcher), do not rely on variable scope sharing for real-time status updates. Instead, have the background worker dump its status payload to a local shared JSON file (e.g., `MyBook_Status.json`), which the main thread polls to update the user interface.
 
-## 3. Pester v3.4.0 Syntax Compatibility
-- **Assertion Operators**: Pester v3.4.0 does not support advanced dash-prefixed parameters (e.g., `Should -Not -BeNullOrEmpty` or `Should -Not -Throw`). Always write assertions using the legacy syntax:
-  - Negation: use `Should Not BeNullOrEmpty`, `Should Not Throw`, `Should Not Be $null`
-  - Boolean: use `Should Be $true` or `Should Be $false`
-  - Comparison: use `Should BeGreaterThan 0`
-  - Collection Null Checks: Avoid piping empty collections (like `BlockingCollection` or arrays) directly to `Should Not Be $null`. PowerShell unpacks the empty collection to nothing, causing the check to fail. Instead, check using a parenthesized boolean assertion: `($null -ne $Engine.FileQueue) | Should Be $true`.
+## 3. Pester Cross-Version Syntax Compatibility (Pester 3.4.0 to Pester 5)
+- **Dual-Version Safe Assertions**: Pester v3.4.0 does not support advanced dash-prefixed parameters (e.g., `Should -Not -BeNullOrEmpty` or `Should -Not -Throw`), but Pester v5 does not support legacy space-separated negation (e.g., `Should Not BeNullOrEmpty` or `Should Not Throw`), throwing a `ParameterBindingException`.
+- **To write assertions that work seamlessly on both versions**:
+  - **Null / Empty Negation**: Use parenthesized string/null checks asserted via `Should -Be $true` or `Should -Be $false`:
+    ```powershell
+    # Correct (works on both Pester 3 and Pester 5):
+    ([string]::IsNullOrEmpty($Type.Type)) | Should -Be $false
+    ($null -ne $Engine) | Should -Be $true
+    ```
+  - **Exception Negation (Should Not Throw)**: Wrap the code block in a `try/catch` and assert a boolean flag status:
+    ```powershell
+    # Correct (works on both Pester 3 and Pester 5):
+    $ranWithoutThrow = $true
+    try {
+        Show-DriveVisualMap -RootPath "C:\"
+    } catch {
+        $ranWithoutThrow = $false
+    }
+    $ranWithoutThrow | Should -Be $true
+    ```
+  - **Collection Null Checks**: Avoid piping empty collections (like `BlockingCollection` or arrays) directly to `Should Not Be $null`. PowerShell unpacks the empty collection to nothing, causing the check to fail. Instead, check using a parenthesized boolean assertion: `($null -ne $Engine.FileQueue) | Should -Be $true`.
 
 ## 4. Re-Saving UTF-8 with BOM Safely
 - **Avoiding Encoding Corruption**: When converting/saving a file to UTF-8 with BOM via PowerShell, ensure you read the file using `-Encoding UTF8` before writing it back. Reading it as ANSI will corrupt existing Unicode glyphs:
