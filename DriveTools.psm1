@@ -187,7 +187,7 @@ if (-not ([System.Management.Automation.PSTypeName]'DriveTools.Core.AuditEngine'
     Add-Type -TypeDefinition $DTCoreSource -ErrorAction Stop
 }
 
-$publicFunctionsPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'public'
+$publicFunctionsPath = Join-Path $PSScriptRoot 'public'
 if (Test-Path $publicFunctionsPath) {
     Get-ChildItem -Path $publicFunctionsPath -Filter '*.ps1' -File | ForEach-Object {
         . $_.FullName
