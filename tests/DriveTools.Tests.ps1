@@ -6,7 +6,7 @@
     Executes structural unit tests, type validation checks, mock safety verification,
     and state serialization path analysis in an isolated ephemeral sandbox environment.
 .NOTES
-    Optimized for Pester v5.7+ and Windows PowerShell 5.1 execution constraints.
+    Compatible with legacy Pester syntax (v3.4.0+) and Windows PowerShell 5.1 execution constraints.
 #>
 
 Describe "DriveTools Core Architecture Test Suite" {

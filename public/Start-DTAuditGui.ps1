@@ -7,6 +7,7 @@
     )
 
     # 1. Instantiate the WPF window from file
+    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
     $XamlPath = Join-Path $PSScriptRoot "..\src\UI\MainWindow.xaml"
     [xml]$XamlContent = Get-Content -Raw -Path $XamlPath
     $Reader = [System.Xml.XmlNodeReader]::new($XamlContent)
@@ -36,7 +37,7 @@
 
             $WorkerBlock = { param([DriveTools.Core.AuditEngine]$EngineInstance) $EngineInstance.StartConsumerWorker() }
 
-            for ($i = 0; $i < $LogicalCores; $i++) {
+            for ($i = 0; $i -lt $LogicalCores; $i++) {
                 $PS = [System.Management.Automation.PowerShell]::Create().AddScript($WorkerBlock).AddArgument($Engine)
                 $PS.RunspacePool = $RunspacePool
                 $AsyncResult = $PS.BeginInvoke()

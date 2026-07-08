@@ -343,7 +343,7 @@ function Invoke-AsyncGuiTask {
     $Script:GuiContext.OutputCollection = $outputCollection
     
     try {
-        [void]$PowerShellInstance.BeginInvoke($outputCollection)
+        [void]$PowerShellInstance.BeginInvoke($null, $outputCollection)
     }
     catch {
         Append-Log "Failed to initialize async runspace pipeline: $($_.Exception.Message)"

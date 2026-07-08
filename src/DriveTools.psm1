@@ -103,7 +103,8 @@ namespace DriveTools.Core {
 
             STORAGE_PROPERTY_QUERY query = new STORAGE_PROPERTY_QUERY {
                 PropertyId = StorageDeviceSeekPenaltyProperty,
-                QueryType = PropertyStandardQuery
+                QueryType = PropertyStandardQuery,
+                AdditionalParameters = new byte[1]
             };
 
             DEVICE_SEEK_PENALTY_DESCRIPTOR descriptor = new DEVICE_SEEK_PENALTY_DESCRIPTOR();
@@ -184,6 +185,13 @@ namespace DriveTools.Core {
 # Compile the C# structures seamlessly if they aren't loaded in AppDomain
 if (-not ([System.Management.Automation.PSTypeName]'DriveTools.Core.AuditEngine').Type) {
     Add-Type -TypeDefinition $DTCoreSource -ErrorAction Stop
+}
+
+$publicFunctionsPath = Join-Path (Split-Path -Parent $PSScriptRoot) 'public'
+if (Test-Path $publicFunctionsPath) {
+    Get-ChildItem -Path $publicFunctionsPath -Filter '*.ps1' -File | ForEach-Object {
+        . $_.FullName
+    }
 }
 
 function Import-SQLiteDependency {
@@ -494,10 +502,13 @@ function Update-DriveHashCache {
                             }
                             try {
                                 if ([System.IO.File]::Exists($item.Path)) {
-                                    $stream = New-Object System.IO.FileStream($item.Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite, 4194304)
-                                    $hashBytes = $sha.ComputeHash($stream)
-                                    $stream.Close()
-                                    $stream.Dispose()
+                                    $stream = $null
+                                    try {
+                                        $stream = New-Object System.IO.FileStream($item.Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite, 4194304)
+                                        $hashBytes = $sha.ComputeHash($stream)
+                                    } finally {
+                                        if ($null -ne $stream) { $stream.Dispose() }
+                                    }
                                     $item.Hash = [System.BitConverter]::ToString($hashBytes).Replace("-", "")
                                 } else { $item.Hash = "" }
                             } catch { $item.Hash = "" }
@@ -547,6 +558,7 @@ function Update-DriveHashCache {
 
                 $dateStr = $fields[3]
                 $time = $dateStr
+                $parsedDate = [datetime]::MinValue
                 if ([DateTime]::TryParse($dateStr, [ref]$parsedDate)) {
                     $time = $parsedDate.ToString('o')
                 }
@@ -895,11 +907,14 @@ function Invoke-DriveAuditFast {
                             }
                             try {
                                  if ([System.IO.File]::Exists($item.Path)) {
-                                    $stream = New-Object System.IO.FileStream($item.Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite, 4194304)
-                                    $hashBytes = $sha.ComputeHash($stream)
-                                    $stream.Close()
-                                    $stream.Dispose()
-                                     $item.Hash = [System.BitConverter]::ToString($hashBytes).Replace("-", "")
+                                   $stream = $null
+                                   try {
+                                       $stream = New-Object System.IO.FileStream($item.Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite, 4194304)
+                                       $hashBytes = $sha.ComputeHash($stream)
+                                   } finally {
+                                       if ($null -ne $stream) { $stream.Dispose() }
+                                   }
+                                    $item.Hash = [System.BitConverter]::ToString($hashBytes).Replace("-", "")
                                 } else { $item.Hash = "" }
                             } catch { $item.Hash = "" }
                             try { $OutputQueue.Enqueue($item) } catch { }
@@ -944,6 +959,7 @@ function Invoke-DriveAuditFast {
 
                 $dateStr = $fields[3]
                 $time = $dateStr
+                $parsedDate = [datetime]::MinValue
                  if ([DateTime]::TryParse($dateStr, [ref]$parsedDate)) {
                     $time = $parsedDate.ToString('o')
                 }
@@ -1535,4 +1551,4 @@ Invoke-DriveAuditFast | Out-Null
 # =====================================================================
 #  EXPORT MODULE MEMBERS
 # =====================================================================
-Export-ModuleMember -Function *-Drive*, Get-DriveToolsStatus, Set-DriveToolsStatus, Clear-DriveToolsStatus, Write-DriveToolsLog, Get-DriveToolsRootPath
+Export-ModuleMember -Function *-Drive*, Get-DriveToolsStatus, Set-DriveToolsStatus, Clear-DriveToolsStatus, Write-DriveToolsLog, Get-DriveToolsRootPath, Start-DTAuditGui
