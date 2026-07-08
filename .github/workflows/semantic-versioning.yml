@@ -32,9 +32,9 @@ jobs:
           # Determine the bump type based on commit message semantics
           $bump = "patch"
           $commitMsg = git log -1 --pretty=%B
-          if ($commitMsg -like "*#major*" -or $commitMsg -like "*[major]*" -or $commitMsg -like "*overhaul*") {
+          if ($commitMsg -match "#major" -or $commitMsg -match "\[major\]" -or $commitMsg -match "overhaul") {
               $bump = "major"
-          } elseif ($commitMsg -like "*#minor*" -or $commitMsg -like "*[minor]*" -or $commitMsg -like "*feature*" -or $commitMsg -like "*enhancement*") {
+          } elseif ($commitMsg -match "#minor" -or $commitMsg -match "\[minor\]" -or $commitMsg -match "feature" -or $commitMsg -match "enhancement") {
               $bump = "minor"
           }
           
