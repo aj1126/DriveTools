@@ -6,7 +6,7 @@
 @{
 
 # ── Identity ──────────────────────────────────────────────────────────────────
-ModuleVersion = '3.0.0'
+ModuleVersion = '4.0.0'
 GUID              = 'e8c4592a-fa6c-486a-8d1b-7484df7c8651'
 RootModule        = 'DriveTools.psm1'
 
