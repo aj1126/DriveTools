@@ -112,6 +112,27 @@ Get-DriveStatus
 
 ---
 
+## 🖥️ WPF Graphical User Interface
+
+For users who prefer a visual interface, **DriveTools** includes a complete WPF Graphical Launcher. It is designed to be highly responsive, running all background drive traversal and hash-computation tasks asynchronously so the UI thread never hangs.
+
+> [!TIP]
+> The GUI is powered by a precompiled C# producer-consumer engine (`AuditEngine`) utilizing `BlockingCollection` to decouple disk I/O from computation.
+
+### 🚀 Launching the GUI
+
+```powershell
+Import-Module DriveTools
+Start-DTAuditGui -ScanPath M:\ -CsvLogPath C:\path\to\log.csv
+```
+
+### ✨ Key Features
+- **Asynchronous Execution**: Traverses the file system and computes SHA256 file hashes in parallel worker threads without blocking the window interface.
+- **Dynamic Progress Updates**: A decoupled progress monitor updates the active folder/file display every 250ms.
+- **One-Click Operations**: Run fast audits, preview auto-categorization, search/remove duplicates, and clean up empty directories without using the command line.
+
+---
+
 ## 📋 Command Reference
 
 ### `Invoke-DriveAuditFast`
@@ -203,13 +224,13 @@ Returns the currently active operation, start time, and last-update timestamp.
 All operations write to daily log files:
 
 ```
-%USERPROFILE%\Documents\DriveLogs\Drive_YYYY-MM-DD.log
+%USERPROFILE%\Documents\DriveToolsLogs\DriveTools_YYYY-MM-DD.log
 ```
 
-Hash cache is stored at:
+The SQLite Hash cache database is stored at:
 
 ```
-%USERPROFILE%\Documents\DriveLogs\Drive_HashCache.json
+%USERPROFILE%\Documents\DriveToolsLogs\DriveTools_HashCache.db
 ```
 
 ---
@@ -222,18 +243,6 @@ Requires [Pester 5](https://pester.dev/docs/introduction/installation).
 Install-Module Pester -Force -SkipPublisherCheck
 Invoke-Pester .\tests\DriveTools.Tests.ps1 -Output Detailed
 ```
-
----
-
-## 🖥️ WPF GUI
-
-Launch the graphical interface with:
-
-```powershell
-.\tools\DriveTools.GUI.ps1
-```
-
-The GUI provides one-click access to all operations, a live status display, and a log viewer.
 
 ---
 
