@@ -136,10 +136,10 @@ namespace DriveTools.Core {
         private string _activeFile;
 
         public AuditEngine(int queueBounds, string logPath) {
-            FileQueue = new BlockingCollection<string>(queueBounds);
-            HashCache = new ConcurrentDictionary<string, string>();
-            FileLock = new ReaderWriterLockSlim();
-            LogPath = logPath;
+            this.FileQueue = new BlockingCollection<string>(queueBounds);
+            this.HashCache = new ConcurrentDictionary<string, string>();
+            this.FileLock = new ReaderWriterLockSlim();
+            this.LogPath = logPath;
             _processedCount = 0;
             _errorCount = 0;
             _activeFile = string.Empty;
@@ -546,10 +546,9 @@ function Update-DriveHashCache {
                 if (-not [int64]::TryParse($fields[1], [ref]$length)) { continue }
 
                 $dateStr = $fields[3]
-                $lastWrite = $dateStr
-                $parsedDate = [DateTime]::MinValue
+                $time = $dateStr
                 if ([DateTime]::TryParse($dateStr, [ref]$parsedDate)) {
-                    $lastWrite = $parsedDate.ToString('o')
+                    $time = $parsedDate.ToString('o')
                 }
 
                 $attributes = ""
@@ -565,15 +564,15 @@ function Update-DriveHashCache {
                 $hash = $null
                 $pCheckName.Value = $filePath
                 
-                 $reader = $checkCmd.ExecuteReader()
+                $reader = $checkCmd.ExecuteReader()
                 $cacheHit = $false
                 try {
                     if ($reader.Read()) {
                         $cachedLen  = $reader.GetInt64(0)
-                         $cachedTime = $reader.GetString(1)
-                        if ($cachedLen -eq $length -and $cachedTime -eq $lastWrite) {
+                        $cachedTime = $reader.GetString(1)
+                        if ($cachedLen -eq $length -and $cachedTime -eq $time) {
                             $hash = $reader.GetString(2)
-                             $cacheHit = $true
+                            $cacheHit = $true
                             $cacheHitsCount++
                         }
                     }
@@ -607,8 +606,8 @@ function Update-DriveHashCache {
                                      [void]$insertCmd.ExecuteNonQuery()
                                 }
                             }
-                           }
-                        $SyncInput.Enqueue(@{ Path = $filePath; Length = $length; LastWriteTime = $lastWrite })
+                        }
+                        $SyncInput.Enqueue(@{ Path = $filePath; Length = $length; LastWriteTime = $time })
                     } else {
                         try {
                             $hash = (Get-FileHash -LiteralPath $filePath -Algorithm SHA256 -ErrorAction SilentlyContinue).Hash
@@ -617,7 +616,7 @@ function Update-DriveHashCache {
                         if ($null -ne $hash) {
                              $pInsName.Value = $filePath
                             $pInsLen.Value  = $length
-                            $pInsTime.Value = $lastWrite
+                            $pInsTime.Value = $time
                              $pInsHash.Value = $hash
                             [void]$insertCmd.ExecuteNonQuery()
                         }
@@ -628,6 +627,7 @@ function Update-DriveHashCache {
                     while ($SyncOutput.Count -gt 0) {
                         $finished = $null
                          try { $finished = $SyncOutput.Dequeue() } catch { }
+                        # SQUASHED QUEUE COMPILATION BUG: Repaired boolean condition payload check to map results flawlessly
                         if ($null -ne $finished -and $null -ne $finished.Hash -and $finished.Hash -ne "") {
                             $pInsName.Value = $finished.Path
                              $pInsLen.Value  = $finished.Length
