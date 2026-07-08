@@ -33,6 +33,7 @@ FunctionsToExport = @(
     'Set-DriveToolsStatus'
     'Clear-DriveToolsStatus'
     'Get-DriveToolsRootPath'
+    'Start-DTAuditGui'
 )
 
 CmdletsToExport   = @()

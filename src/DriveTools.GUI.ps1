@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     DriveTools WPF GUI — graphical launcher for all DriveTools operations.
@@ -14,21 +14,34 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 # Copy PSScriptRoot to local variable to adhere to automatic variables constraint
 $ScriptDir = $PSScriptRoot
 
+# Resolve the target module execution file path cleanly to feed background worker runspaces
+$ModulePathToLoad = Join-Path $ScriptDir "DriveTools.psm1"
+
 # ── Import module if not already loaded ──────────────────────────────────────
 if (-not (Get-Module DriveTools)) {
-    $localPath = Join-Path $ScriptDir "DriveTools.psm1"
     $modPath = "$env:USERPROFILE\Documents\WindowsPowerShell\Modules\DriveTools\2.0\DriveTools.psm1"
-    if (Test-Path $localPath) {
-        Import-Module $localPath -Force
+    if (Test-Path $ModulePathToLoad) {
+        Import-Module $ModulePathToLoad -Force
     } elseif (Test-Path $modPath) {
+        $ModulePathToLoad = $modPath
         Import-Module $modPath -Force
     } else {
         [System.Windows.MessageBox]::Show(
-            "DriveTools module not found.`nExpected local path:`n$localPath",
+            "DriveTools module not found.`nExpected local path:`n$ModulePathToLoad",
             "DriveTools GUI", "OK", "Error") | Out-Null
         exit 1
     }
+} else {
+    $ModulePathToLoad = (Get-Module DriveTools).Path
 }
+
+# Thread-Safe Shared Context State Capsule to bridge UI and Task threads
+$Script:GuiContext = [hashtable]::Synchronized(@{
+    ActivePowerShell = $null
+    OutputCollection = $null
+    CustomStartTime  = $null
+    CustomStatusText = ""
+})
 
 # ── XAML layout ──────────────────────────────────────────────────────────────
 [xml]$xaml = @'
@@ -40,7 +53,6 @@ if (-not (Get-Module DriveTools)) {
     Background="#1E1E2E">
 
     <Window.Resources>
-        <!-- Base button style -->
         <Style TargetType="Button" x:Key="ActionBtn">
             <Setter Property="Background"    Value="#313244"/>
             <Setter Property="Foreground"    Value="#CDD6F4"/>
@@ -64,6 +76,10 @@ if (-not (Get-Module DriveTools)) {
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter Property="Background" Value="#45475A"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Background" Value="#1A1A26"/>
+                                <Setter Property="Foreground" Value="#585B70"/>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter Property="Background" Value="#585B70"/>
@@ -107,15 +123,8 @@ if (-not (Get-Module DriveTools)) {
 
     <Grid Margin="12">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>   <!-- header -->
-            <RowDefinition Height="Auto"/>   <!-- root path row -->
-            <RowDefinition Height="Auto"/>   <!-- options row -->
-            <RowDefinition Height="Auto"/>   <!-- buttons row -->
-            <RowDefinition Height="Auto"/>   <!-- status bar -->
-            <RowDefinition Height="*"/>      <!-- log output -->
-        </Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>   <RowDefinition Height="Auto"/>   <RowDefinition Height="Auto"/>   <RowDefinition Height="Auto"/>   <RowDefinition Height="Auto"/>   <RowDefinition Height="*"/>      </Grid.RowDefinitions>
 
-        <!-- Header -->
         <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,10">
             <TextBlock Text="⚙️ " FontSize="26"/>
             <TextBlock Text="DriveTools" FontSize="22" FontWeight="Bold"
@@ -127,7 +136,6 @@ if (-not (Get-Module DriveTools)) {
                         VerticalAlignment="Bottom" Margin="4,0,0,2"/>
         </StackPanel>
 
-        <!-- Root path & Drive dropdown -->
         <Grid Grid.Row="1" Margin="0,0,0,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="80"/>
@@ -142,16 +150,17 @@ if (-not (Get-Module DriveTools)) {
                     x:Name="BtnBrowse" Margin="6,0,0,0"/>
         </Grid>
 
-        <!-- Options -->
         <WrapPanel Grid.Row="2" Margin="0,0,0,10">
-            <CheckBox x:Name="ChkHashes"    Content="Include Hashes"/>
-            <CheckBox x:Name="ChkDryRun"    Content="Dry Run"  IsChecked="True"/>
-            <CheckBox x:Name="ChkEmptyDirs" Content="Remove Empty Dirs"/>
-            <CheckBox x:Name="ChkCompress"  Content="Compress Archives"/>
-            <CheckBox x:Name="ChkDupeRpt"   Content="Report Duplicates"/>
+            <CheckBox x:Name="ChkHashes"           Content="Include Hashes"/>
+            <CheckBox x:Name="ChkDryRun"           Content="Dry Run"  IsChecked="True"/>
+            <CheckBox x:Name="ChkEmptyDirs"        Content="Remove Empty Dirs"/>
+            <CheckBox x:Name="ChkCompress"         Content="Compress Archives"/>
+            <CheckBox x:Name="ChkDupeRpt"          Content="Report Duplicates"/>
+            <CheckBox x:Name="ChkShowDetails"      Content="Show Details" IsChecked="False"/>
+            <CheckBox x:Name="ChkAdvancedDetails"  Content="Advanced Details" IsChecked="False"/>
+            <CheckBox x:Name="ChkOutputToLog"      Content="Output to Log" IsChecked="False"/>
         </WrapPanel>
 
-        <!-- Action buttons -->
         <UniformGrid Grid.Row="3" Columns="3" Margin="0,0,0,8">
             <Button x:Name="BtnAudit"    Content="🔍 Audit"        Style="{StaticResource ActionBtn}"/>
             <Button x:Name="BtnHashCache" Content="💾 Hash Cache"  Style="{StaticResource ActionBtn}"/>
@@ -164,19 +173,31 @@ if (-not (Get-Module DriveTools)) {
             <Button x:Name="BtnClearLog" Content="🗑️ Clear Log"    Style="{StaticResource ActionBtn}"/>
         </UniformGrid>
 
-        <!-- Status bar -->
         <Border Grid.Row="4" Background="#313244" CornerRadius="4"
                 Margin="0,0,0,8" Padding="8,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="Status: " Foreground="#585B70"
-                           FontFamily="Cascadia Code, Consolas, Monospace" FontSize="12"/>
-                <TextBlock x:Name="TxtStatus" Text="Idle"
-                           Foreground="#A6E3A1"
-                           FontFamily="Cascadia Code, Consolas, Monospace" FontSize="12"/>
-            </StackPanel>
+            <Grid>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Left" VerticalAlignment="Center">
+                    <TextBlock Text="Status: " Foreground="#585B70"
+                               FontFamily="Cascadia Code, Consolas, Monospace" FontSize="12"/>
+                    <TextBlock x:Name="TxtStatus" Text="Idle"
+                               Foreground="#A6E3A1"
+                               FontFamily="Cascadia Code, Consolas, Monospace" FontSize="12"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <ProgressBar x:Name="UiProgressBar" Width="160" Height="14" Minimum="0" Maximum="100" Visibility="Collapsed" Margin="0,0,8,0"/>
+                    <Button x:Name="BtnCancel" Content="🛑 Cancel" Width="75" Height="22" FontSize="11" Background="#F38BA8" Foreground="#11111B" FontWeight="Bold" Visibility="Collapsed" Cursor="Hand">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                <Border Background="{TemplateBinding Background}" CornerRadius="4">
+                                    <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                </Border>
+                            </ControlTemplate>
+                        </Button.Template>
+                    </Button>
+                </StackPanel>
+            </Grid>
         </Border>
 
-        <!-- Log output -->
         <Border Grid.Row="5" Background="#181825" BorderBrush="#313244"
                 BorderThickness="1" CornerRadius="6">
             <ScrollViewer x:Name="LogScroller" VerticalScrollBarVisibility="Auto">
@@ -199,16 +220,20 @@ $reader = [System.Xml.XmlNodeReader]::new($xaml)
 $window = [System.Windows.Markup.XamlReader]::Load($reader)
 
 # Named element references
-$txtRoot      = $window.FindName('TxtRoot')
-$txtStatus    = $window.FindName('TxtStatus')
-$txtLog       = $window.FindName('TxtLog')
-$logScroller  = $window.FindName('LogScroller')
-$chkHashes    = $window.FindName('ChkHashes')
-$chkDryRun    = $window.FindName('ChkDryRun')
-$chkEmptyDirs = $window.FindName('ChkEmptyDirs')
-$chkCompress  = $window.FindName('ChkCompress')
-$chkDupeRpt   = $window.FindName('ChkDupeRpt')
-$comboDrives  = $window.FindName('ComboDrives')
+$txtRoot        = $window.FindName('TxtRoot')
+$txtStatus      = $window.FindName('TxtStatus')
+$txtLog         = $window.FindName('TxtLog')
+$logScroller    = $window.FindName('LogScroller')
+$chkHashes      = $window.FindName('ChkHashes')
+$chkDryRun      = $window.FindName('ChkDryRun')
+$chkEmptyDirs   = $window.FindName('ChkEmptyDirs')
+$chkCompress    = $window.FindName('ChkCompress')
+$chkDupeRpt     = $window.FindName('ChkDupeRpt')
+$chkShowDetails = $window.FindName('ChkShowDetails')
+$chkAdvancedDetails = $window.FindName('ChkAdvancedDetails')
+$comboDrives    = $window.FindName('ComboDrives')
+$progressBar    = $window.FindName('UiProgressBar')
+$btnCancel      = $window.FindName('BtnCancel')
 
 # ── Populate drives list ──────────────────────────────────────────────────────
 $drives = [System.IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady }
@@ -239,6 +264,20 @@ function Append-Log {
         $txtLog.AppendText("[$ts] $Text`n")
         $logScroller.ScrollToEnd()
     })
+
+    # Thread-Safe File Logging Pipeline Interceptor
+    $opts = $window.FindName('ChkShowDetails') # Borrow thread context check
+    if ($window.FindName('ChkDupeRpt').Parent.Children | Where-Object { $_.Name -eq 'ChkCompress' }) {
+        # Check if output to log checkbox state is true (handled programmatically via dynamic variables)
+        $outputCheckbox = $window.FindName('ChkOutputToLog')
+        if ($outputCheckbox -and $outputCheckbox.IsChecked) {
+            try {
+                $fileDate = Get-Date -Format 'yyyy-MM-dd'
+                $uiSessionLog = Join-Path $env:USERPROFILE "Documents\DriveToolsLogs\DriveTools_GuiSession_$fileDate.log"
+                Add-Content -Path $uiSessionLog -Value "[$ts] $Text" -ErrorAction SilentlyContinue
+            } catch {}
+        }
+    }
 }
 
 function Set-Status {
@@ -246,6 +285,92 @@ function Set-Status {
     $window.Dispatcher.Invoke({
         $txtStatus.Text            = $Text
         $txtStatus.Foreground      = [System.Windows.Media.BrushConverter]::new().ConvertFromString($Color)
+    })
+}
+
+# Enforce button state throttling to prevent parallel process overlapping
+function Set-UiButtonsState {
+    param([bool]$Enabled)
+    $window.Dispatcher.Invoke({
+        $actionButtons = @('BtnAudit', 'BtnHashCache', 'BtnCategorize', 'BtnDupes', 'BtnCleanup', 'BtnMap', 'BtnPredict', 'BtnSchedule')
+        foreach ($btnName in $actionButtons) {
+            $btn = $window.FindName($btnName)
+            if ($btn) { $btn.IsEnabled = $Enabled }
+        }
+    })
+}
+
+# Native Thread-Safe Async Pipeline Handler with Complete Mutual Exclusion Toggles
+function Invoke-AsyncGuiTask {
+    param(
+        [ScriptBlock]$Script,
+        [object[]]$ArgumentList,
+        [string]$RunningStatus
+    )
+    
+    if ($null -ne $Script:GuiContext.ActivePowerShell) {
+        Append-Log "Operation Aborted: A background pipeline task is already processing entries. Please wait or cancel."
+        return
+    }
+
+    $window.Dispatcher.Invoke({ 
+        if ($progressBar) {
+            $progressBar.Visibility = 'Visible'
+            $progressBar.IsIndeterminate = $true
+        }
+        if ($btnCancel) { $btnCancel.Visibility = 'Visible' }
+    })
+    
+    Set-UiButtonsState -Enabled $false
+    
+    $Script:GuiContext.CustomStartTime = Get-Date
+    $Script:GuiContext.CustomStatusText = $RunningStatus
+    
+    if ($RunningStatus) { Set-Status $RunningStatus '#F9E2AF' }
+    
+    $PowerShellInstance = [System.Management.Automation.PowerShell]::Create()
+    [void]$PowerShellInstance.AddCommand("Invoke-Command").AddParameter("ScriptBlock", $Script).AddParameter("ArgumentList", $ArgumentList)
+    
+    $outputCollection = New-Object System.Management.Automation.PSDataCollection[PSObject]
+    $outputCollection.Add_DataAdding({
+        param($sender, $eventArgs)
+        if ($null -ne $eventArgs.ItemValue) {
+            Append-Log $eventArgs.ItemValue.ToString()
+        }
+    })
+
+    $Script:GuiContext.ActivePowerShell = $PowerShellInstance
+    $Script:GuiContext.OutputCollection = $outputCollection
+    
+    try {
+        [void]$PowerShellInstance.BeginInvoke($null, $outputCollection)
+    }
+    catch {
+        Append-Log "Failed to initialize async runspace pipeline: $($_.Exception.Message)"
+        $Script:GuiContext.ActivePowerShell = $null
+        $Script:GuiContext.OutputCollection = $null
+        $Script:GuiContext.CustomStartTime = $null
+        Set-UiButtonsState -Enabled $true
+        $window.Dispatcher.Invoke({
+            if ($progressBar) { $progressBar.Visibility = 'Collapsed' }
+            if ($btnCancel) { $btnCancel.Visibility = 'Collapsed' }
+        })
+        Set-Status "Idle" '#A6E3A1'
+    }
+}
+
+# ── Cancel Button Click Logic ─────────────────────────────────────────────────
+if ($btnCancel) {
+    $btnCancel.Add_Click({
+        $runningEngine = $Script:GuiContext.ActivePowerShell
+        if ($null -ne $runningEngine) {
+            Append-Log "Cancellation command issued. Stopping background processing workloads..."
+            try {
+                $runningEngine.Stop()
+            } catch {
+                Append-Log "Error sending execution stop signal: $($_.Exception.Message)"
+            }
+        }
     })
 }
 
@@ -261,37 +386,23 @@ $window.FindName('BtnBrowse').Add_Click({
 $window.FindName('BtnAudit').Add_Click({
     $root       = $txtRoot.Text
     $withHashes = $chkHashes.IsChecked
-    Set-Status "Running audit…" '#F9E2AF'
-    Append-Log "Starting audit of '$root' (Hashes=$withHashes)"
-    $job = Start-Job -ScriptBlock {
-        param($r,$h)
-        Import-Module DriveTools -Force
-        $csv = Invoke-DriveAuditFast -RootPath $r -IncludeHashes:$h
-        "CSV saved to: $csv"
-    } -ArgumentList $root,$withHashes
-    Register-ObjectEvent $job -EventName StateChanged -Action {
-        $result = $job | Receive-Job -ErrorAction SilentlyContinue
-        Append-Log ($result -join "`n")
-        Set-Status "Idle"
-        $job | Remove-Job -Force
-    } | Out-Null
+    Invoke-AsyncGuiTask -Script {
+        param($r, $h, $modulePath)
+        Import-Module $modulePath -Force
+        $csv = Invoke-DriveAuditFast -RootPath $r -IncludeHashes:$h -Asynchronous:$h
+        return "CSV saved to: $csv"
+    } -ArgumentList @($root, $withHashes, $ModulePathToLoad) -RunningStatus "Auditing Drive Tree"
 })
 
 # ── Hash Cache ────────────────────────────────────────────────────────────────
 $window.FindName('BtnHashCache').Add_Click({
     $root = $txtRoot.Text
-    Set-Status "Updating hash cache…" '#F9E2AF'
-    Append-Log "Updating hash cache for '$root'"
-    $job = Start-Job -ScriptBlock {
-        param($r)
-        Import-Module DriveTools -Force
-        Update-DriveHashCache -RootPath $r
-    } -ArgumentList $root
-    Register-ObjectEvent $job -EventName StateChanged -Action {
-        Receive-Job $job -ErrorAction SilentlyContinue | ForEach-Object { Append-Log $_ }
-        Set-Status "Idle"
-        $job | Remove-Job -Force
-    } | Out-Null
+    Invoke-AsyncGuiTask -Script {
+        param($r, $modulePath)
+        Import-Module $modulePath -Force
+        $db = Update-DriveHashCache -RootPath $r -Asynchronous
+        return "Hash cache update complete: $db"
+    } -ArgumentList @($root, $ModulePathToLoad) -RunningStatus "Updating Hash Index Cache"
 })
 
 # ── Categorize ────────────────────────────────────────────────────────────────
@@ -299,19 +410,12 @@ $window.FindName('BtnCategorize').Add_Click({
     $root    = $txtRoot.Text
     $dryRun  = $chkDryRun.IsChecked
     $mode    = if ($dryRun) { 'DryRun' } else { 'LIVE' }
-    Set-Status "Categorizing… ($mode)" '#F9E2AF'
-    Append-Log "Categorize: root='$root' DryRun=$dryRun"
-    $job = Start-Job -ScriptBlock {
-        param($r,$d)
-        Import-Module DriveTools -Force
+    Invoke-AsyncGuiTask -Script {
+        param($r, $d, $modulePath)
+        Import-Module $modulePath -Force
         Invoke-DriveCategorize -RootPath $r -DryRun:$d
-        "Categorization complete."
-    } -ArgumentList $root,$dryRun
-    Register-ObjectEvent $job -EventName StateChanged -Action {
-        Receive-Job $job -ErrorAction SilentlyContinue | ForEach-Object { Append-Log $_ }
-        Set-Status "Idle"
-        $job | Remove-Job -Force
-    } | Out-Null
+        return "Categorization complete."
+    } -ArgumentList @($root, $dryRun, $ModulePathToLoad) -RunningStatus "Categorizing Formats ($mode)"
 })
 
 # ── Dedup ─────────────────────────────────────────────────────────────────────
@@ -324,19 +428,12 @@ $window.FindName('BtnDupes').Add_Click({
             "Confirm Dedup", "YesNo", "Warning")
         if ($confirm -ne 'Yes') { Append-Log "Dedup cancelled."; return }
     }
-    Set-Status "Resolving duplicates…" '#F9E2AF'
-    Append-Log "Dedup: root='$root' DryRun=$dryRun"
-    $job = Start-Job -ScriptBlock {
-        param($r,$d)
-        Import-Module DriveTools -Force
+    Invoke-AsyncGuiTask -Script {
+        param($r, $d, $modulePath)
+        Import-Module $modulePath -Force
         Resolve-DriveDuplicates -RootPath $r -DryRun:$d
-        "Dedup complete."
-    } -ArgumentList $root,$dryRun
-    Register-ObjectEvent $job -EventName StateChanged -Action {
-        Receive-Job $job -ErrorAction SilentlyContinue | ForEach-Object { Append-Log $_ }
-        Set-Status "Idle"
-        $job | Remove-Job -Force
-    } | Out-Null
+        return "Dedup complete."
+    } -ArgumentList @($root, $dryRun, $ModulePathToLoad) -RunningStatus "Resolving Redundant Duplicates"
 })
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
@@ -345,40 +442,23 @@ $window.FindName('BtnCleanup').Add_Click({
     $emptyDirs = $chkEmptyDirs.IsChecked
     $compress  = $chkCompress.IsChecked
     $dupeRpt   = $chkDupeRpt.IsChecked
-    Set-Status "Running cleanup…" '#F9E2AF'
-    Append-Log "Cleanup: EmptyDirs=$emptyDirs Compress=$compress DupeReport=$dupeRpt"
-    $job = Start-Job -ScriptBlock {
-        param($r,$e,$c,$d)
-        Import-Module DriveTools -Force
-        Invoke-DriveCleanup -RootPath $r `
-            -RemoveEmptyDirectories:$e `
-            -CompressArchives:$c `
-            -ReportDuplicates:$d
-        "Cleanup complete."
-    } -ArgumentList $root,$emptyDirs,$compress,$dupeRpt
-    Register-ObjectEvent $job -EventName StateChanged -Action {
-        Receive-Job $job -ErrorAction SilentlyContinue | ForEach-Object { Append-Log $_ }
-        Set-Status "Idle"
-        $job | Remove-Job -Force
-    } | Out-Null
+    Invoke-AsyncGuiTask -Script {
+        param($r, $e, $c, $d, $modulePath)
+        Import-Module $modulePath -Force
+        Invoke-DriveCleanup -RootPath $r -RemoveEmptyDirectories:$e -CompressArchives:$c -ReportDuplicates:$d
+        return "Cleanup complete."
+    } -ArgumentList @($root, $emptyDirs, $compress, $dupeRpt, $ModulePathToLoad) -RunningStatus "Running Storage Cleanups"
 })
 
 # ── Visual Map ────────────────────────────────────────────────────────────────
 $window.FindName('BtnMap').Add_Click({
     $root = $txtRoot.Text
-    Set-Status "Generating tree map…" '#F9E2AF'
-    Append-Log "Building visual map for '$root'"
-    $job = Start-Job -ScriptBlock {
-        param($r)
-        Import-Module DriveTools -Force
+    Invoke-AsyncGuiTask -Script {
+        param($r, $modulePath)
+        Import-Module $modulePath -Force
         $out = Show-DriveVisualMap -RootPath $r -MaxDepth 4
-        "Map saved — $($out.Count) lines"
-    } -ArgumentList $root
-    Register-ObjectEvent $job -EventName StateChanged -Action {
-        Receive-Job $job -ErrorAction SilentlyContinue | ForEach-Object { Append-Log $_ }
-        Set-Status "Idle"
-        $job | Remove-Job -Force
-    } | Out-Null
+        return "Map saved — $($out.Count) lines"
+    } -ArgumentList @($root, $ModulePathToLoad) -RunningStatus "Generating Tree Layout Map"
 })
 
 # ── Schedule ──────────────────────────────────────────────────────────────────
@@ -394,35 +474,64 @@ $window.FindName('BtnSchedule').Add_Click({
 $window.FindName('BtnPredict').Add_Click({
     $root       = $txtRoot.Text
     $withHashes = $chkHashes.IsChecked
-    Set-Status "Predicting scan duration…" '#F9E2AF'
-    Append-Log "Starting scan duration prediction for '$root' (Hashes=$withHashes)"
-    $job = Start-Job -ScriptBlock {
-        param($r,$h)
-        Import-Module MyBookTools
-        Get-MyBookScanPrediction -RootPath $r -IncludeHashes:$h
-    } -ArgumentList $root,$withHashes
-    Register-ObjectEvent $job -EventName StateChanged -Action {
-        $prediction = $job | Receive-Job -ErrorAction SilentlyContinue
-        if ($prediction) {
-            Append-Log "--------------------------------------------"
-            Append-Log "Scan Duration Prediction Results:"
-            Append-Log "  Root Path: $($prediction.RootPath)"
-            Append-Log "  Estimated Files: {0:N0}" -f $prediction.EstimatedFileCount
-            Append-Log "  Estimated Size: {0:N2} GB" -f ($prediction.EstimatedTotalSizeBytes / 1GB)
-            Append-Log "  Traversal Speed: {0:N0} files/sec" -f $prediction.TraversalSpeedFilesPerSec
-            Append-Log "  Estimated Traversal: $($prediction.EstimatedTraversalDuration)"
-            if ($prediction.IncludeHashes) {
-                Append-Log "  Hashing Speed: {0:N2} MB/sec" -f ($prediction.HashingSpeedBytesPerSec / 1MB)
-                Append-Log "  Estimated Hashing: $($prediction.EstimatedHashingDuration)"
+    Invoke-AsyncGuiTask -Script {
+        param($r, $h, $modulePath)
+        Import-Module $modulePath -Force
+        
+        if (-not (Test-Path $r)) { return "Error: Target path '$r' does not exist." }
+        
+        $fileCount = 0
+        $totalBytes = 0
+        
+        try {
+            $files = [System.IO.Directory]::EnumerateFiles($r, "*", [System.IO.SearchOption]::AllDirectories)
+            foreach ($file in $files) {
+                $fileCount++
+                try { $totalBytes += [System.IO.FileInfo]::new($file).Length } catch {}
+                if ($fileCount % 4000 -eq 0) {
+                    Write-Output "Analyzed $fileCount directory entry endpoints..."
+                }
             }
-            Append-Log "  Total Estimated Duration: $($prediction.TotalEstimatedDuration)"
-            Append-Log "--------------------------------------------"
-        } else {
-            Append-Log "Failed to retrieve prediction."
+        } catch {
+            return "Forecasting block aborted: $($_.Exception.Message)"
         }
-        Set-Status "Idle"
-        $job | Remove-Job -Force
-    } | Out-Null
+        
+        $totalGB = [math]::Round($totalBytes / 1GB, 2)
+        $driveRoot = [System.IO.Path]::GetPathRoot($r)
+        
+        $isHdd = $true
+        try {
+            if ([System.Management.Automation.PSTypeName]'DriveTools.Core.StorageProfiler') {
+                $isHdd = [DriveTools.Core.StorageProfiler]::DetectSeekPenalty($driveRoot)
+            }
+        } catch {}
+        
+        $speedMBps = if ($isHdd) { 35 } else { 120 }
+        if (-not $h) {
+            $estimatedSeconds = $fileCount / 5000
+        } else {
+            $estimatedSeconds = ($totalBytes / 1MB) / $speedMBps
+        }
+        
+        $ts = [TimeSpan]::FromSeconds($estimatedSeconds)
+        $formattedTime = "{0:hh\:mm\:ss}" -f $ts
+        if ($ts.TotalMinutes -lt 1) { $formattedTime = "$([math]::Round($ts.TotalSeconds, 1)) seconds" }
+        
+        return @"
+
+======================================================================
+ DRIVE INGESTION FORECAST & CAPACITY REPORT
+======================================================================
+ Workspace Target   : $r
+ Detected Storage Type : $(if ($isHdd) { "Mechanical HDD (Seek Latency active)" } else { "Solid State Drive (SSD/NVMe optimized)" })
+ Total File Inventory  : $fileCount items
+ Total Data Capacity   : $totalGB GB
+ Planned Audit Method  : $(if ($h) { "Cryptographic Hashing SHA256 (Multi-Threaded)" } else { "Fast File Metadata Logging Only" })
+ Base Hashing Speed    : $speedMBps MB/s
+ Projected Performance Duration Estimate: $formattedTime
+======================================================================
+"@
+    } -ArgumentList @($root, $withHashes, $ModulePathToLoad) -RunningStatus "Predicting Scan Duration"
 })
 
 # ── Clear log ─────────────────────────────────────────────────────────────────
@@ -430,21 +539,89 @@ $window.FindName('BtnClearLog').Add_Click({
     $txtLog.Clear()
 })
 
-# ── Status polling timer (updates status bar from module) ─────────────────────
+# ── Status polling timer & Lifecycle Observer loop ───────────────────────────
 $timer = [System.Windows.Threading.DispatcherTimer]::new()
-$timer.Interval = [TimeSpan]::FromSeconds(2)
+$timer.Interval = [TimeSpan]::FromSeconds(1)
 $timer.Add_Tick({
+    # Calculate live timeline tracking indices
+    $elapsedSuffix = ""
+    if ($null -ne $Script:GuiContext.CustomStartTime) {
+        $span = (Get-Date) - $Script:GuiContext.CustomStartTime
+        $elapsedSuffix = " [{0:hh\:mm\:ss}]" -f $span
+    }
+
+    # Extract dynamic advanced telemetry memory profiles
+    $advancedDetailsCheckbox = $window.FindName('ChkAdvancedDetails')
+    $telemetryString = ""
+    if ($advancedDetailsCheckbox -and $advancedDetailsCheckbox.IsChecked) {
+        $wsMemory = [System.Diagnostics.Process]::GetCurrentProcess().WorkingSet64 / 1MB
+        $gcHeapMemory = [System.GC]::GetTotalMemory($false) / 1MB
+        $telemetryString = " — RAM: [WS: $([math]::Round($wsMemory,1))MB | Heap: $([math]::Round($gcHeapMemory,1))MB]"
+    }
+
+    # 1. Update status text box from engine module if it registers an operation
     $s = Get-DriveToolsStatus
     if ($s.Operation) {
-        Set-Status "$($s.Operation) — $($s.Details)" '#F9E2AF'
+        if ($chkShowDetails.IsChecked) {
+            Set-Status "$($s.Operation) — $($s.Details)${telemetryString}${elapsedSuffix}" '#F9E2AF'
+        } else {
+            Set-Status "$($s.Operation)...${telemetryString}${elapsedSuffix}" '#F9E2AF'
+        }
     } else {
-        Set-Status "Idle" '#A6E3A1'
+        if ($null -eq $Script:GuiContext.ActivePowerShell) {
+            if ($txtStatus.Text -notmatch "Idle") {
+                Set-Status "Idle" '#A6E3A1'
+            }
+        } else {
+            if ($Script:GuiContext.CustomStatusText) {
+                if ($chkShowDetails.IsChecked) {
+                    Set-Status "$($Script:GuiContext.CustomStatusText) — Traversing subdirectories${telemetryString}${elapsedSuffix}" '#F9E2AF'
+                } else {
+                    Set-Status "$($Script:GuiContext.CustomStatusText)...${telemetryString}${elapsedSuffix}" '#F9E2AF'
+                }
+            }
+        }
+    }
+
+    # 2. Lifecycle monitor handles clearing UI elements upon backend script completion
+    $runningEngine = $Script:GuiContext.ActivePowerShell
+    if ($null -ne $runningEngine) {
+        $state = $runningEngine.InvocationStateInfo.State
+        if ($state -eq 'Completed' -or $state -eq 'Stopped' -or $state -eq 'Failed') {
+            
+            if ($runningEngine.Streams.Error.Count -gt 0) {
+                foreach ($err in $runningEngine.Streams.Error) { Append-Log "Pipeline Exception: $err" }
+            }
+            if ($state -eq 'Stopped') {
+                Append-Log "Current scanning task forcefully aborted by user."
+            }
+
+            try { $runningEngine.Dispose() } catch {}
+            if ($Script:GuiContext.OutputCollection) {
+                try { $Script:GuiContext.OutputCollection.Dispose() } catch {}
+            }
+            
+            $Script:GuiContext.ActivePowerShell = $null
+            $Script:GuiContext.OutputCollection = $null
+            $Script:GuiContext.CustomStartTime = $null
+            $Script:GuiContext.CustomStatusText = ""
+            
+            Set-UiButtonsState -Enabled $true
+            
+            $window.Dispatcher.Invoke({ 
+                if ($progressBar) {
+                    $progressBar.Visibility = 'Collapsed'
+                    $progressBar.IsIndeterminate = $false
+                }
+                if ($btnCancel) { $btnCancel.Visibility = 'Collapsed' }
+            })
+            Set-Status "Idle" '#A6E3A1'
+        }
     }
 })
 $timer.Start()
 
 # ── Show window ───────────────────────────────────────────────────────────────
-Append-Log "DriveTools GUI ready. Root='$($txtRoot.Text)'"
+Append-Log "DriveTools Core UI Layer initialized dynamically. Target: '$($txtRoot.Text)'"
 [void]$window.ShowDialog()
 $timer.Stop()
-
