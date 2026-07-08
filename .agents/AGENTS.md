@@ -80,3 +80,15 @@
   // Incorrect (C# 6):
   public int ProcessedCount => _processedCount;
   ```
+
+## 10. Safe Directory Cleanup in Module Installers
+- **Strict Version Pattern Filtering**: When writing directory cleanup routines in PowerShell installers that remove stale, non-matching module version folders (e.g. cleaning up outdated versions under `Documents/PowerShell/Modules/<ModuleName>/`), you must never delete folders using a generic "name not equal to active version" check.
+- **Validation Guard**: Always filter directory names using a strict numeric version regex pattern (like `^\d+(\.\d+)*$`) to ensure only versioned directories (such as `3.0.2` or `2.0`) are matched, leaving git metadata (`.git`), source paths (`src`, `lib`), and local repository assets unharmed:
+  ```powershell
+  # CORRECT:
+  Get-ChildItem -Path $parentDir -Directory | Where-Object { $_.Name -match '^\d+(\.\d+)*$' -and $_.Name -ne $version } | Remove-Item -Recurse -Force
+
+  # INCORRECT (will delete repository metadata/source folders if developed in-place):
+  Get-ChildItem -Path $parentDir -Directory | Where-Object { $_.Name -ne $version } | Remove-Item -Recurse -Force
+  ```
+
