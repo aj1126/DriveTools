@@ -1,6 +1,6 @@
-# MyBookTools
+# DriveTools
 
-MyBookTools is a PowerShell module designed to audit, organize, refine, and maintain large external drives.
+DriveTools is a PowerShell module designed to audit, organize, refine, and maintain large external drives.
 
 ## Features
 

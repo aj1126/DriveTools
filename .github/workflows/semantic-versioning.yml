@@ -1,4 +1,22 @@
-- name: Bump Manifest Version and Push Tag
+name: Semantic Versioning
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Bump Manifest Version and Push Tag
         shell: pwsh
         run: |
           $manifestPath = "./src/DriveTools.psd1"

@@ -18,4 +18,4 @@ jobs:
 
     - name: Sign Module
       run: |
-        Set-AuthenticodeSignature -FilePath src/MyBookTools.psm1 -Certificate $cert
+        Set-AuthenticodeSignature -FilePath src/DriveTools.psm1 -Certificate $cert

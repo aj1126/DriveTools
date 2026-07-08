@@ -56,19 +56,19 @@ Describe "DriveTools Core Architecture Test Suite" {
         
         It "Should have compiled and registered the DriveTools.Core.AuditEngine type" {
             $Type = [System.Management.Automation.PSTypeName]'DriveTools.Core.AuditEngine'
-            $Type.Type | Should -Not -BeNullOrEmpty
+            ([string]::IsNullOrEmpty($Type.Type)) | Should -Be $false
         }
 
         It "Should have compiled and registered the DriveTools.Core.StorageProfiler type" {
             $Type = [System.Management.Automation.PSTypeName]'DriveTools.Core.StorageProfiler'
-            $Type.Type | Should -Not -BeNullOrEmpty
+            ([string]::IsNullOrEmpty($Type.Type)) | Should -Be $false
         }
 
         It "Should successfully instantiate the AuditEngine class with safe bounded structures" {
             $MockLog = Join-Path $Script:TestLogDir "engine_init_test.csv"
             $Engine = [DriveTools.Core.AuditEngine]::new(5000, $MockLog)
             
-            $Engine | Should -Not -BeNullOrEmpty
+            ($null -ne $Engine) | Should -Be $true
             $Engine.ProcessedCount | Should -Be 0
             $Engine.ErrorCount | Should -Be 0
             # PROPERTY BINDING VERIFICATION: Checked against the exposed auto-property context snapshot allocation
@@ -160,7 +160,13 @@ Describe "DriveTools Core Architecture Test Suite" {
         
         It "Should gracefully handle UnauthorizedAccessException or deep folder access errors" {
             # Standardized Pester v5 script block format constraints
-            { Show-DriveVisualMap -RootPath "C:\" -MaxDepth 1 -OutputPath (Join-Path $Script:TestLogDir "vmap.txt") } | Should -Not -Throw
+            $ranWithoutThrow = $true
+            try {
+                Show-DriveVisualMap -RootPath "C:\" -MaxDepth 1 -OutputPath (Join-Path $Script:TestLogDir "vmap.txt")
+            } catch {
+                $ranWithoutThrow = $false
+            }
+            $ranWithoutThrow | Should -Be $true
         }
 
         It "Should break cleanly with a descriptive log entry if an un-hydrated cache database is queried for dedup" {
