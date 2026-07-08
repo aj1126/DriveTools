@@ -722,3 +722,4 @@ function Get-DriveScanPrediction {
 
 Export-ModuleMember -Function *-Drive*, Get-DriveToolsStatus, Set-DriveToolsStatus, Clear-DriveToolsStatus, Write-DriveToolsLog, Get-DriveToolsRootPath, Get-DriveScanPrediction
 
+
