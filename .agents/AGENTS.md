@@ -1,6 +1,7 @@
 # Global Rules
 
 - **Continuous Verification & Bug-Checking**: When you learn a new rule or constraint (e.g., via the `/learn` workflow), you must immediately ask to check/verify the rule against the current project files to scan for and resolve any existing violations.
+- **Git Push/Pull Synchronization**: When pushing changes to the `main` branch on GitHub, be aware that automated CI/CD workflows (such as Semantic Versioning bumps) will trigger and commit updates back to `main`. After pushing, if `main` is currently checked out, wait briefly for any remote runs to complete and always pull/rebase (`git pull --rebase origin main`) before starting new tasks or making subsequent pushes, preventing rejected refs.
 
 ---
 
