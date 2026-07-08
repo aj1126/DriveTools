@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     DriveTools WPF GUI — graphical launcher for all DriveTools operations.
@@ -15,11 +15,11 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 $ScriptDir = $PSScriptRoot
 
 # Resolve the target module execution file path cleanly to feed background worker runspaces
-$ModulePathToLoad = Join-Path $ScriptDir "DriveTools.psm1"
+$ModulePathToLoad = Join-Path $ScriptDir "DriveTools.psd1"
 
 # ── Import module if not already loaded ──────────────────────────────────────
 if (-not (Get-Module DriveTools)) {
-    $modPath = "$env:USERPROFILE\Documents\WindowsPowerShell\Modules\DriveTools\2.0\DriveTools.psm1"
+    $modPath = "$env:USERPROFILE\Documents\WindowsPowerShell\Modules\DriveTools\2.0\DriveTools.psd1"
     if (Test-Path $ModulePathToLoad) {
         Import-Module $ModulePathToLoad -Force
     } elseif (Test-Path $modPath) {

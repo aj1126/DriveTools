@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     DriveTools — Complete drive auditing, categorization, refinement, and maintenance toolkit.
@@ -1513,10 +1513,10 @@ function Register-DriveMaintenanceTask {
     }
 
      $ScriptDir = $PSScriptRoot
-    $ModulePsm1 = Join-Path $ScriptDir 'DriveTools.psm1'
+    $ModulePath = Join-Path $ScriptDir 'DriveTools.psd1'
 
     $scriptBlock = @"
-Import-Module `"$ModulePsm1`"
+Import-Module `"$ModulePath`"
 Invoke-DriveAuditFast | Out-Null
 "@
 

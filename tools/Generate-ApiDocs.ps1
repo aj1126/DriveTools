@@ -1,7 +1,8 @@
-$module = Import-Module ../src/DriveTools.psm1 -Force -PassThru
+$modulePath = Join-Path $PSScriptRoot '../src/DriveTools.psd1'
+$module = Import-Module $modulePath -Force -PassThru
 $commands = $module.ExportedFunctions.Keys
 
-$apiPath = "../docs/api/DriveTools.md"
+$apiPath = Join-Path $PSScriptRoot "../docs/api/DriveTools.md"
 Remove-Item $apiPath -ErrorAction SilentlyContinue
 
 foreach ($cmd in $commands) {

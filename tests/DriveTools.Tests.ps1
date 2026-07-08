@@ -15,7 +15,7 @@ Describe "DriveTools Core Architecture Test Suite" {
         Write-Host "[Test Setup] Initializing virtual sandbox environment..." -ForegroundColor Cyan
         
         # 1. Initialize ModuleRoot inside BeforeAll to capture correct Run Phase variables
-        $Script:ModuleRoot = Join-Path $PSScriptRoot "..\src\DriveTools.psm1"
+        $Script:ModuleRoot = Join-Path $PSScriptRoot "..\src\DriveTools.psd1"
         
         if (-not [string]::IsNullOrEmpty($Script:ModuleRoot) -and (Test-Path $Script:ModuleRoot)) {
             Import-Module $Script:ModuleRoot -Force
