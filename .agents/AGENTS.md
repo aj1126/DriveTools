@@ -9,6 +9,7 @@
 
 ## 1. File Encoding and Compatibility (PowerShell 5.1+)
 - **UTF-8 with BOM Requirement**: Any `.ps1` or `.psm1` script containing Unicode characters (e.g., box-drawing characters, arrows, symbols) MUST be saved in **UTF-8 with BOM** (Byte Order Mark) encoding. This ensures that Windows PowerShell 5.1 parses the file correctly instead of defaulting to ANSI and throwing syntax errors, while remaining fully compatible with PowerShell Core (7+).
+  *Note*: In .NET Core / PowerShell 7+, `[System.Text.Encoding]::UTF8` defaults to UTF-8 *without* BOM. To force BOM generation cross-version safely, instantiate `[System.Text.UTF8Encoding]::new($true)` explicitly.
 
 ## 2. Cross-Process State Management in GUI Background Jobs
 - **File-Based State Communication**: When running long-running module functions in background threads or processes (e.g., via `Start-Job` in a WPF GUI launcher), do not rely on variable scope sharing for real-time status updates. Instead, have the background worker dump its status payload to a local shared JSON file (e.g., `MyBook_Status.json`), which the main thread polls to update the user interface.
@@ -45,6 +46,11 @@
   # INCORRECT (converts already-corrupted characters):
   (Get-Content "src\File.psm1" -Raw) | Set-Content "src\File.psm1" -Encoding UTF8
   ```
+  If re-saving programmatically from .NET APIs:
+  ```powershell
+  # CORRECT (Force BOM in PowerShell 7+):
+  [System.IO.File]::WriteAllText($path, $content, [System.Text.UTF8Encoding]::new($true))
+  ```
 
 ## 5. Safe String Formatting in Modules
 - **Explicit Array Packaging**: When using the string format operator (`-f`) inside module functions, avoid passing comma-separated lists of mixed characters and strings directly. PowerShell can experience parameter unpacking failures. Package formatting arguments explicitly in an array first:
@@ -58,12 +64,17 @@
 
 ## 7. PSAvoidEmptyCatchBlock Compliance
 - **Justify Empty Catch Blocks**: Catch blocks must not be empty. If an error is meant to be ignored silently (e.g. transient file lock or background status serialization), include an explicit comment inside the catch block explaining the rationale:
+  Additionally, since PSScriptAnalyzer treats blocks containing only comments as empty, you must include a dummy statement (such as `$null = $_` or `$null = $PSItem`) to satisfy the analyzer.
+  For single-line catch blocks, use block comments `<# ... #>` instead of line comments `#` to prevent commenting out the closing brace.
   ```powershell
   try {
       Remove-Item -Path $statusFile -Force
   } catch {
-      # Ignore removal errors if status file is already deleted or locked by another process.
+      $null = $_ # Ignore removal errors if status file is already deleted or locked by another process.
   }
+
+  # Single-Line Correct Example:
+  try { $Queue.Enqueue($item) } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
   ```
 
 ## 8. Artifact and Workspace File Operations
