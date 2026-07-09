@@ -1,4 +1,4 @@
-﻿#
+#
 # DriveTools.psd1 — Module Manifest
 # Generated for DriveTools v2.0
 #
@@ -6,7 +6,7 @@
 @{
 
 # ── Identity ──────────────────────────────────────────────────────────────────
-ModuleVersion = '3.0.4'
+ModuleVersion = '3.0.5'
 GUID              = 'e8c4592a-fa6c-486a-8d1b-7484df7c8651'
 RootModule        = 'DriveTools.psm1'
 
@@ -49,6 +49,7 @@ PrivateData = @{
 }
 
 }
+
 
 
 
