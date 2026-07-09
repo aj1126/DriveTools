@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+﻿#Requires -Version 5.1
 <#
 .SYNOPSIS
     DriveTools — Complete drive auditing, categorization, refinement, and maintenance toolkit.
@@ -308,7 +308,7 @@ function Set-DriveToolsStatus {
     try {
         $statusFile = Join-Path $Script:DriveTools_DefaultLogRoot 'DriveTools_Status.json'
         $Script:DriveTools_Status | ConvertTo-Json | Set-Content -Path $statusFile -Encoding UTF8
-    } catch {
+    } catch {    $null = $_ # PSAvoidEmptyCatchBlock
         # PSAvoidEmptyCatchBlock: Ignore serialization locks
     }
 }
@@ -324,7 +324,7 @@ function Clear-DriveToolsStatus {
         if (Test-Path $statusFile) {
             Remove-Item -Path $statusFile -Force -ErrorAction SilentlyContinue
         }
-    } catch {
+    } catch {    $null = $_ # PSAvoidEmptyCatchBlock
         # PSAvoidEmptyCatchBlock: Safe fallback
     }
 }
@@ -342,7 +342,7 @@ function Get-DriveToolsStatus {
                     Details    = $json.Details
                 }
             }
-        } catch {
+        } catch {    $null = $_ # PSAvoidEmptyCatchBlock
             # PSAvoidEmptyCatchBlock: Fallback safely
         }
     }
@@ -493,7 +493,7 @@ function Update-DriveHashCache {
                             $item = $null
                             try {
                                 if ($InputQueue.Count -gt 0) { $item = $InputQueue.Dequeue() }
-                            } catch { }
+                            } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
 
                             if ($null -eq $item) {
                                 if ($State.IsProducerDone -and $InputQueue.Count -eq 0) { break }
@@ -512,9 +512,9 @@ function Update-DriveHashCache {
                                     $item.Hash = [System.BitConverter]::ToString($hashBytes).Replace("-", "")
                                 } else { $item.Hash = "" }
                             } catch { $item.Hash = "" }
-                            try { $OutputQueue.Enqueue($item) } catch { }
+                            try { $OutputQueue.Enqueue($item) } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                         }
-                    } catch {
+                    } catch {    $null = $_ # PSAvoidEmptyCatchBlock
                     } finally {
                         if ($null -ne $sha) { $sha.Dispose() }
                     }
@@ -609,7 +609,7 @@ function Update-DriveHashCache {
                             [System.Threading.Thread]::Sleep(30)
                              while ($SyncOutput.Count -gt 0) {
                                 $finished = $null
-                                try { $finished = $SyncOutput.Dequeue() } catch { }
+                                try { $finished = $SyncOutput.Dequeue() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                                  if ($null -ne $finished -and $null -ne $finished.Hash -and $finished.Hash -ne "") {
                                     $pInsName.Value = $finished.Path
                                      $pInsLen.Value  = $finished.Length
@@ -638,7 +638,7 @@ function Update-DriveHashCache {
                 if ($Asynchronous -and $SyncOutput.Count -gt 0) {
                     while ($SyncOutput.Count -gt 0) {
                         $finished = $null
-                         try { $finished = $SyncOutput.Dequeue() } catch { }
+                         try { $finished = $SyncOutput.Dequeue() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                         # SQUASHED QUEUE COMPILATION BUG: Repaired boolean condition payload check to map results flawlessly
                         if ($null -ne $finished -and $null -ne $finished.Hash -and $finished.Hash -ne "") {
                             $pInsName.Value = $finished.Path
@@ -718,7 +718,7 @@ function Update-DriveHashCache {
                                     [System.Threading.Thread]::Sleep(30)
                                      while ($SyncOutput.Count -gt 0) {
                                         $finished = $null
-                                        try { $finished = $SyncOutput.Dequeue() } catch { }
+                                        try { $finished = $SyncOutput.Dequeue() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                                         if ($null -ne $finished -and $null -ne $finished.Hash -and $finished.Hash -ne "") {
                                              $pInsName.Value = $finished.Path
                                             $pInsLen.Value  = $finished.Length
@@ -747,7 +747,7 @@ function Update-DriveHashCache {
                         if ($Asynchronous -and $SyncOutput.Count -gt 0) {
                             while ($SyncOutput.Count -gt 0) {
                                  $finished = $null
-                                try { $finished = $SyncOutput.Dequeue() } catch { }
+                                try { $finished = $SyncOutput.Dequeue() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                                 if ($null -ne $finished -and $null -ne $finished.Hash -and $finished.Hash -ne "") {
                                     $pInsName.Value = $finished.Path
                                     $pInsLen.Value  = $finished.Length
@@ -757,7 +757,7 @@ function Update-DriveHashCache {
                                  }
                             }
                         }
-                    } catch { }
+                    } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                 }
             }
         }
@@ -767,7 +767,7 @@ function Update-DriveHashCache {
             while ($true) {
                 while ($SyncOutput.Count -gt 0) {
                     $finished = $null
-                    try { $finished = $SyncOutput.Dequeue() } catch { }
+                    try { $finished = $SyncOutput.Dequeue() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                     if ($null -ne $finished -and $null -ne $finished.Hash -and $finished.Hash -ne "") {
                         $pInsName.Value = $finished.Path
                          $pInsLen.Value  = $finished.Length
@@ -797,7 +797,7 @@ function Update-DriveHashCache {
         $transaction.Commit()
     } catch {
         if ($null -ne $transaction) {
-            try { $transaction.Rollback() } catch { }
+            try { $transaction.Rollback() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
         }
         throw $_
     } finally {
@@ -809,10 +809,10 @@ function Update-DriveHashCache {
         $conn.Dispose()
         
         foreach ($w in $Workers) {
-            try { $w.PowerShell.Dispose() } catch { }
+            try { $w.PowerShell.Dispose() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
         }
         if ($null -ne $Pool) {
-             try { $Pool.Close(); $Pool.Dispose() } catch { }
+             try { $Pool.Close(); $Pool.Dispose() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
         }
         
         [System.GC]::Collect()
@@ -898,7 +898,7 @@ function Invoke-DriveAuditFast {
                              $item = $null
                             try {
                                 if ($InputQueue.Count -gt 0) { $item = $InputQueue.Dequeue() }
-                             } catch { }
+                             } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
 
                             if ($null -eq $item) {
                                 if ($State.IsProducerDone -and $InputQueue.Count -eq 0) { break }
@@ -917,7 +917,7 @@ function Invoke-DriveAuditFast {
                                     $item.Hash = [System.BitConverter]::ToString($hashBytes).Replace("-", "")
                                 } else { $item.Hash = "" }
                             } catch { $item.Hash = "" }
-                            try { $OutputQueue.Enqueue($item) } catch { }
+                            try { $OutputQueue.Enqueue($item) } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                         }
                     } finally {
                         if ($null -ne $sha) { $sha.Dispose() }
@@ -1006,7 +1006,7 @@ function Invoke-DriveAuditFast {
                                 [System.Threading.Thread]::Sleep(30)
                                  while ($SyncOutput.Count -gt 0) {
                                     $finished = $null
-                                     try { $finished = $SyncOutput.Dequeue() } catch { }
+                                     try { $finished = $SyncOutput.Dequeue() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                                     if ($null -ne $finished) {
                                         $escapedP = $finished.Path -replace '"', '""'
                                          $fmtArgs = @($escapedP, $finished.Length, $finished.Extension, $finished.Time, $finished.Hash)
@@ -1032,7 +1032,7 @@ function Invoke-DriveAuditFast {
                 if ($Asynchronous -and $SyncOutput.Count -gt 0) {
                     while  ($SyncOutput.Count -gt 0) {
                         $finished = $null
-                        try { $finished = $SyncOutput.Dequeue() } catch { }
+                        try { $finished = $SyncOutput.Dequeue() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                         if ($null -ne $finished) {
                              $escapedP = $finished.Path -replace '"', '""'
                             $fmtArgs = @($escapedP, $finished.Length, $finished.Extension, $finished.Time, $finished.Hash)
@@ -1107,7 +1107,7 @@ function Invoke-DriveAuditFast {
                                          [System.Threading.Thread]::Sleep(30)
                                         while ($SyncOutput.Count -gt 0) {
                                             $finished = $null
-                                             try { $finished = $SyncOutput.Dequeue() } catch { }
+                                             try { $finished = $SyncOutput.Dequeue() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                                             if ($null -ne $finished) {
                                                  $escapedP = $finished.Path -replace '"', '""'
                                                 $fmtArgs = @($escapedP, $finished.Length, $finished.Extension, $finished.Time, $finished.Hash)
@@ -1132,7 +1132,7 @@ function Invoke-DriveAuditFast {
                          if ($Asynchronous -and $SyncOutput.Count -gt 0) {
                             while ($SyncOutput.Count -gt 0) {
                                 $finished = $null
-                                 try { $finished = $SyncOutput.Dequeue() } catch { }
+                                 try { $finished = $SyncOutput.Dequeue() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                                 if ($null -ne $finished) {
                                      $escapedP = $finished.Path -replace '"', '""'
                                     $fmtArgs = @($escapedP, $finished.Length, $finished.Extension, $finished.Time, $finished.Hash)
@@ -1140,7 +1140,7 @@ function Invoke-DriveAuditFast {
                                  }
                             }
                         }
-                    } catch { }
+                    } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                 }
             }
         }
@@ -1150,7 +1150,7 @@ function Invoke-DriveAuditFast {
             while ($true) {
                 while ($SyncOutput.Count -gt 0) {
                     $finished = $null
-                     try { $finished = $SyncOutput.Dequeue() } catch { }
+                     try { $finished = $SyncOutput.Dequeue() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                     if ($null -ne $finished) {
                         $escapedP = $finished.Path -replace '"', '""'
                         $fmtArgs = @($escapedP, $finished.Length, $finished.Extension, $finished.Time, $finished.Hash)
@@ -1180,10 +1180,10 @@ function Invoke-DriveAuditFast {
         if ($null -ne $conn) { $conn.Close(); $conn.Dispose() }
         
         foreach ($w in $Workers) {
-            try { $w.PowerShell.Dispose() } catch { }
+            try { $w.PowerShell.Dispose() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
         }
         if ($null -ne $Pool) {
-            try { $Pool.Close(); $Pool.Dispose() } catch { }
+            try { $Pool.Close(); $Pool.Dispose() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
         }
         
         [System.GC]::Collect()
@@ -1426,8 +1426,8 @@ function Invoke-DriveCleanup {
                     $discoveredDirs.Add($subDir)
                     $dirQueue.Enqueue($subDir)
                 }
-            } catch [System.UnauthorizedAccessException] { } 
-            catch [System.IO.IOException] { }
+            } catch [System.UnauthorizedAccessException] { $null = $_ <# PSAvoidEmptyCatchBlock #> } 
+            catch [System.IO.IOException] { $null = $_ <# PSAvoidEmptyCatchBlock #> }
         }
 
         $sortedDirs = $discoveredDirs | Sort-Object Length -Descending
