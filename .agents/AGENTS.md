@@ -103,3 +103,8 @@
   Get-ChildItem -Path $parentDir -Directory | Where-Object { $_.Name -ne $version } | Remove-Item -Recurse -Force
   ```
 
+## 11. Folder-Scoped Database Operations
+- **Constraint**: When running database queries or file modifications (such as deduplication or catalog cleanup) targeted at a specific `-RootPath`, you MUST restrict the operation scope using SQL parameters or local file path checks.
+- **Path Prefix Match**: Ensure the query prefix handles trailing directory separators correctly (e.g. `$resolvedPath.TrimEnd('\') + '\%'` in SQLite) to avoid matching sibling directories with similar prefixes (like `C:\Folder-copy` matching `C:\Folder`).
+
+
