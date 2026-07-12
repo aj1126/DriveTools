@@ -1320,6 +1320,11 @@ function Resolve-DriveDuplicates {
     }
 
     $resolvedPath = Get-DriveToolsRootPath -Path $RootPath
+    $PathPrefix = $resolvedPath
+    if (-not $PathPrefix.EndsWith('\')) {
+        $PathPrefix += '\'
+    }
+    $LikePattern = $PathPrefix + '%'
     $CachePath = Join-Path $Script:DriveTools_DefaultLogRoot 'DriveTools_HashCache.db'
     
     if (-not (Test-Path $CachePath)) {
@@ -1339,11 +1344,18 @@ function Resolve-DriveDuplicates {
     try {
         $conn.Open()
         $queryCmd = $conn.CreateCommand()
-        $queryCmd.CommandText =  @'
+        $queryCmd.CommandText = @'
             SELECT FullName, Hash FROM FileInventory 
-            WHERE Hash IN (SELECT Hash FROM FileInventory GROUP BY Hash HAVING COUNT(*) > 1)
+            WHERE FullName LIKE @LikePattern 
+              AND Hash IN (
+                  SELECT Hash FROM FileInventory 
+                  WHERE FullName LIKE @LikePattern 
+                  GROUP BY Hash 
+                  HAVING COUNT(*) > 1
+              )
             ORDER BY Hash, LastWriteTime DESC
 '@
+        [void]$queryCmd.Parameters.AddWithValue("@LikePattern", $LikePattern)
 
         $reader = $queryCmd.ExecuteReader()
         $currentHash = $null

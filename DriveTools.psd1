@@ -1,4 +1,4 @@
-#
+﻿#
 # DriveTools.psd1 — Module Manifest
 # Generated for DriveTools v2.0
 #

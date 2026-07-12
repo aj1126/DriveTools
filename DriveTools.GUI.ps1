@@ -1,4 +1,4 @@
-﻿#Requires -Version 5.1
+#Requires -Version 5.1
 <#
 .SYNOPSIS
     DriveTools WPF GUI — graphical launcher for all DriveTools operations.
@@ -266,7 +266,6 @@ function Append-Log {
     })
 
     # Thread-Safe File Logging Pipeline Interceptor
-    $opts = $window.FindName('ChkShowDetails') # Borrow thread context check
     if ($window.FindName('ChkDupeRpt').Parent.Children | Where-Object { $_.Name -eq 'ChkCompress' }) {
         # Check if output to log checkbox state is true (handled programmatically via dynamic variables)
         $outputCheckbox = $window.FindName('ChkOutputToLog')
@@ -275,7 +274,9 @@ function Append-Log {
                 $fileDate = Get-Date -Format 'yyyy-MM-dd'
                 $uiSessionLog = Join-Path $env:USERPROFILE "Documents\DriveToolsLogs\DriveTools_GuiSession_$fileDate.log"
                 Add-Content -Path $uiSessionLog -Value "[$ts] $Text" -ErrorAction SilentlyContinue
-            } catch {}
+            } catch {
+                $null = $_ # PSAvoidEmptyCatchBlock: Ignore write failures if log file is locked or inaccessible.
+            }
         }
     }
 }
@@ -333,9 +334,9 @@ function Invoke-AsyncGuiTask {
     
     $outputCollection = New-Object System.Management.Automation.PSDataCollection[PSObject]
     $outputCollection.Add_DataAdding({
-        param($sender, $eventArgs)
-        if ($null -ne $eventArgs.ItemValue) {
-            Append-Log $eventArgs.ItemValue.ToString()
+        param($evtSender, $evtArgs)
+        if ($null -ne $evtArgs.ItemValue) {
+            Append-Log $evtArgs.ItemValue.ToString()
         }
     })
 
@@ -487,7 +488,7 @@ $window.FindName('BtnPredict').Add_Click({
             $files = [System.IO.Directory]::EnumerateFiles($r, "*", [System.IO.SearchOption]::AllDirectories)
             foreach ($file in $files) {
                 $fileCount++
-                try { $totalBytes += [System.IO.FileInfo]::new($file).Length } catch {}
+                try { $totalBytes += [System.IO.FileInfo]::new($file).Length } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
                 if ($fileCount % 4000 -eq 0) {
                     Write-Output "Analyzed $fileCount directory entry endpoints..."
                 }
@@ -504,7 +505,9 @@ $window.FindName('BtnPredict').Add_Click({
             if ([System.Management.Automation.PSTypeName]'DriveTools.Core.StorageProfiler') {
                 $isHdd = [DriveTools.Core.StorageProfiler]::DetectSeekPenalty($driveRoot)
             }
-        } catch {}
+        } catch {
+            $null = $_ # PSAvoidEmptyCatchBlock: Fallback to HDD seek penalty if StorageProfiler throws or isn't loaded.
+        }
         
         $speedMBps = if ($isHdd) { 35 } else { 120 }
         if (-not $h) {
@@ -551,9 +554,8 @@ $timer.Add_Tick({
     }
 
     # Extract dynamic advanced telemetry memory profiles
-    $advancedDetailsCheckbox = $window.FindName('ChkAdvancedDetails')
     $telemetryString = ""
-    if ($advancedDetailsCheckbox -and $advancedDetailsCheckbox.IsChecked) {
+    if ($chkAdvancedDetails -and $chkAdvancedDetails.IsChecked) {
         $wsMemory = [System.Diagnostics.Process]::GetCurrentProcess().WorkingSet64 / 1MB
         $gcHeapMemory = [System.GC]::GetTotalMemory($false) / 1MB
         $telemetryString = " — RAM: [WS: $([math]::Round($wsMemory,1))MB | Heap: $([math]::Round($gcHeapMemory,1))MB]"
@@ -596,9 +598,9 @@ $timer.Add_Tick({
                 Append-Log "Current scanning task forcefully aborted by user."
             }
 
-            try { $runningEngine.Dispose() } catch {}
+            try { $runningEngine.Dispose() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
             if ($Script:GuiContext.OutputCollection) {
-                try { $Script:GuiContext.OutputCollection.Dispose() } catch {}
+                try { $Script:GuiContext.OutputCollection.Dispose() } catch { $null = $_ <# PSAvoidEmptyCatchBlock #> }
             }
             
             $Script:GuiContext.ActivePowerShell = $null
