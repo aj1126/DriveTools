@@ -107,4 +107,9 @@
 - **Constraint**: When running database queries or file modifications (such as deduplication or catalog cleanup) targeted at a specific `-RootPath`, you MUST restrict the operation scope using SQL parameters or local file path checks.
 - **Path Prefix Match**: Ensure the query prefix handles trailing directory separators correctly (e.g. `$resolvedPath.TrimEnd('\') + '\%'` in SQLite) to avoid matching sibling directories with similar prefixes (like `C:\Folder-copy` matching `C:\Folder`).
 
+## 12. NotebookLM Workspace Binding
+- **Prevent Incorrect Workspace Notebook Connection**: Do not assume the active notebook returned by `notebooklm status` (which represents the global/last used CLI context) is the correct one for the current project. 
+- **Binding Check**: Before performing any NotebookLM-related operation (such as syncing, listing sources, or asking questions), always check for `.workspace_context/notebooklm.json`. If it exists, verify it contains the correct workspace notebook ID and run `uvx --from notebooklm-py notebooklm use <notebook_id>` if needed to bind the session. If it does not exist, search the user's notebooks for a match with the project name (e.g., `MyDriveTools`), use it, and save the notebook ID to `.workspace_context/notebooklm.json` to initialize the project binding.
+
+
 
